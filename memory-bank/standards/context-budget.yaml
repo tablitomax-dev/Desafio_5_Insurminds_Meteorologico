@@ -1,0 +1,209 @@
+version: 1.1.0
+project: Desafio_5_Tempo
+effective_date: 2026-08-22
+owner: Master Agent (AI-DLC Option A)
+
+description: >
+  Orçamento de contexto LLM determinístico para o AI-DLC.
+  Modelo alvo: DeepSeek V4 Flash (janela 1M tokens, max output 384K).
+  Proxy de tokens: 4 chars UTF-8 ≈ 1 token + margem de segurança de 20%.
+  Níveis de warning: 80% 🟡 | 90% 🟠 | 95% 🔴 (Hard Stop).
+  Revisão 1.1.0 (ADR-003): hard cap 120k → 250k (25% da janela 1M),
+  corrige inconsistência analyze-context vs depth_levels, adiciona OPT-13
+  (cache-aware loading) e política de thinking mode.
+
+---
+model_profile:
+  name: "deepseek-v4-flash"
+  context_window_tokens: 1048576  # 1M
+  max_output_tokens: 384000
+  thinking_mode: "supported (default ON via API)"
+  pricing_per_1M:
+    input_cache_miss_usd: 0.14
+    input_cache_hit_usd: 0.0028   # 50x mais barato que cache miss
+    output_usd: 0.28              # token mais caro
+  cost_implication: >
+    CACHE HIT é o fator dominante de custo (50x). Prefixo estável = cache hit.
+    OUTPUT é o token mais caro → evitar thinking mode em skills de diagnóstico.
+
+proxy:
+  chars_per_token: 4
+  safety_margin_pct: 20
+  formula: effective_tokens = (raw_chars / chars_per_token) * (1 + safety_margin_pct/100)
+
+hard_caps:
+  session:
+    chars: 833333
+    tokens: 250000
+    description: >
+      Limite máximo por sessão TRAE = 25% da janela 1M do DeepSeek V4 Flash.
+      Margem enorme para 384k output + thinking. Nunca ultrapassar.
+  artifact_load_single:
+    chars: 51200
+    tokens: 16000
+    description: >
+      Nenhum artefato individual (ddd-01/02/03, etc.) pode exceder.
+      Força uso de bolt-summary-compact em vez de artefatos brutos.
+
+depth_levels:
+  TINY:
+    chars: 9600
+    tokens: 3000
+    use_case: "Overview rápido, listagens, confirmação de status, navegação."
+    description: "Carrega apenas _index.csv + keywords + ADRs relevantes (3k tokens)."
+  STANDARD:
+    chars: 48000
+    tokens: 15000
+    default: true
+    use_case: "90% das sessões normais. Leitura de 1-2 bolts completos + índices."
+    description: "Carrega índices + ADRs + 1 bolt completo (summary compact + 1 estágio se precisar)."
+  DEEP:
+    chars: 256000
+    tokens: 80000
+    use_case: "Auditoria profunda, refatoração, debug complexo, construção multi-bolt."
+    description: "Carrega até 5 bolts completos + todos ADRs + keywords. Só usar com confirmação do usuário."
+
+budget_per_skill:
+  master:
+    analyze-context:
+      TINY: 3000
+      STANDARD: 15000
+      DEEP: 80000
+      note: >
+        analyze-context É o skill que carrega conteúdo → budget DEVE ser ≥ depth_levels.
+        Corrigido na v1.1.0 (antes era 2400/6400/14400, inconsistente).
+    route-request: 800
+    explain-flow: 2400
+    answer-question: 3200
+    project-init: 4800
+  inception:
+    intent-create: 4800
+    requirements: 8000
+    story-create: 6400
+    units: 4800
+    bolt-plan: 6400
+    context: 3200
+    review: 4800
+    vibe-to-spec: 6400
+  construction:
+    bolt-start: 8000
+    bolt-status: 3200
+    bolt-list: 1600
+    navigator: 2400
+    bolt-replan: 6400
+    prototype-apply: 8000
+  operations:
+    build: 4800
+    deploy: 3200
+    monitor: 2400
+    verify: 4800
+
+# OPT-13 (ADR-003): Cache-Aware Context Loading
+# DeepSeek cobra $0.0028/M (cache hit) vs $0.14/M (cache miss) = 50x.
+# analyze-context roda em TODA interação → prefixo estável = cache hit = custo mínimo.
+cache_aware_loading:
+  enabled: true
+  principle: >
+    Ordem de carregamento FIXA e DETERMINÍSTICA. Conteúdo estável SEMPRE primeiro,
+    conteúdo variável SEMPRE por último. Assim o prefixo do prompt é idêntico entre
+    chamadas e o cache do DeepSeek reutiliza os tokens estáveis.
+  fixed_load_order:
+    - "1. .specsmd/aidlc/memory-bank.yaml (schema — estável, sempre primeiro)"
+    - "2. memory-bank/standards/context-budget.yaml (budget — estável)"
+    - "3. memory-bank/standards/decision-index.md (ADRs — muda raramente)"
+    - "4. memory-bank/standards/keyword-index.md (índice invertido)"
+    - "5. memory-bank/{dir}/_index.csv (metadados canônicos por diretório)"
+    - "6. CONTEÚDO VARIÁVEL POR ÚLTIMO (bolts, stories, units ativos)"
+  rules:
+    - "NUNCA intercalar conteúdo variável no meio do prefixo estável."
+    - "NUNCA reordenar os itens 1-5 entre chamadas (mesma ordem sempre)."
+    - "Se um item estável não for necessário, carregar mesmo assim (vazio) para manter prefixo."
+    - "Conteúdo variável (item 6) muda por sessão — é o único custo de cache miss esperado."
+  expected_savings: "50x no custo de input dos itens estáveis (1-5)."
+
+# Política de Thinking Mode (ADR-003)
+# Output é o token mais caro ($0.28/M). Thinking mode consome output tokens.
+thinking_mode:
+  policy: "non_thinking_for_diagnostic"
+  non_thinking_skills:
+    - "analyze-context"
+    - "route-request"
+    - "answer-question"
+    - "explain-flow"
+    - "bolt-list"
+    - "bolt-status"
+    - "intent-list"
+    - "navigator"
+    reason: >
+      Skills de diagnóstico/navegação não precisam de raciocínio profundo.
+      Non-thinking = mais rápido + mais barato (sem output tokens de reasoning).
+  thinking_skills:
+    - "bolt-start"
+    - "bolt-replan"
+    - "requirements"
+    - "story-create"
+    - "units"
+    - "vibe-to-spec"
+    - "prototype-apply"
+    - "build"
+    reason: >
+      Skills de construção/planejamento exigem qualidade de código e design.
+      Thinking mode mantém qualidade (custo maior justificado).
+
+warning_thresholds:
+  "80":
+    label: "🟡 WARNING (Amarelo)"
+    action: "inline_warning"
+    description: "Apenas notifica. Continua execução. Usuário decide se quer otimizar."
+    message_template: >
+      🟡 Budget de contexto: %used%/%cap% tokens (%pct%%).
+      Dica: considere nível TINY para próxima operação.
+  "90":
+    label: "🟠 CRITICAL (Laranja)"
+    action: "pause_and_prompt_user"
+    description: "PAUSA a execução. Mostra 3 opções ao usuário ANTES de continuar."
+    user_options:
+      - option: "A"
+        label: "Reduzir profundidade para TINY e continuar"
+        effect: "Carrega só índices, sem artefatos brutos. Continua."
+      - option: "B"
+        label: "Continuar com nível atual (assume risco)"
+        effect: "Segue operação. Atenção: próximo nível = Hard Stop."
+      - option: "C"
+        label: "Parar agora e compactar contexto (maintenance run)"
+        effect: "Roda OPT-06: compacta bolts, atualiza summaries, limpa LRU."
+    message_template: >
+      🟠 Budget de contexto CRITICAL: %used%/%cap% tokens (%pct%%).
+      Escolha uma opção antes de continuar:
+      [A] Reduzir → TINY | [B] Continuar mesmo assim | [C] Parar + compactar
+  "95":
+    label: "🔴 HARD STOP (Vermelho)"
+    action: "hard_stop_abort"
+    description: "NÃO executa a operação. Abre 2 rotas de recuperação."
+    recovery_routes:
+      - route: "R1"
+        label: "Compactar + LRU flush (automático)"
+        steps:
+          - "1. Gera bolt-summary-compact.md para todos bolts pending de compactação"
+          - "2. Substitui leitura de ddd-01/02/03 brutos pelos summaries (exceto se DEEP for requisitado explicitamente)"
+          - "3. Marca 30% dos artefatos menos recentes (LRU) como 'não carregar por padrão'"
+          - "4. Registra operação em maintenance-log.md"
+      - route: "R2"
+        label: "Iniciar nova sessão TRAE (manual do usuário)"
+        steps:
+          - "1. Usuário abre nova aba/sessão no TRAE"
+          - "2. Master Agent recarrega apenas STANDARD (15k tokens) na nova sessão"
+          - "3. Estado persistido no memory-bank; nada se perde."
+    message_template: >
+      🔴 HARD STOP. Orçamento de contexto excedeu %used%/%cap% tokens (%pct%%).
+      Operação NÃO foi executada para evitar alucinação.
+      Rotas de recuperação: [R1] Compactação automática | [R2] Nova sessão TRAE.
+
+integrity:
+  enforce: true
+  description: >
+    Nenhum skill pode carregar conteúdo de arquivo SEM antes rodar integrity check
+    (status cascade: bolt complete → story complete → unit complete → intent complete).
+  skip_allowed:
+    skills: ["project-init"]
+    reason: "Inicialização, ainda não há artefatos para validar."

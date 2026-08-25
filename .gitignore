@@ -1,0 +1,15 @@
+# Dependências
+node_modules/
+
+# Logs
+*.log
+.graph-last-updates.log
+
+# Artefatos locais / ferramentas
+.trae/
+.claude/
+.specsmd/
+
+# Sistema
+.DS_Store
+Thumbs.db

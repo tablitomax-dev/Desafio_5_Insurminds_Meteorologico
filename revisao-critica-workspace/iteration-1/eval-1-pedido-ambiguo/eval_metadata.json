@@ -1,0 +1,6 @@
+{
+  "eval_id": 1,
+  "eval_name": "pedido-ambiguo",
+  "prompt": "Faz um sistema de login para o projeto",
+  "assertions": []
+}

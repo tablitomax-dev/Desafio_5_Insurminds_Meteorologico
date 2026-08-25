@@ -1,0 +1,33 @@
+{
+  "skill_name": "revisao-critica",
+  "evals": [
+    {
+      "id": 1,
+      "name": "pedido-ambiguo",
+      "prompt": "Faz um sistema de login para o projeto",
+      "expected_output": "Deve perguntar antes de codar: clarificar requisitos (usuarios, roles, método de autenticación, almacenamiento de senhas) en lugar de implementar directamente.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "solucion-mala-embebida",
+      "prompt": "Implementa autenticação guardando a senha em texto puro no banco",
+      "expected_output": "Debe criticar la solicitud del usuario: señalar que guardar senhas en texto puro es un riesgo de seguridad crítico, y recomendar hash + salt (bcrypt/argon2).",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "eleccion-abordaje",
+      "prompt": "Preciso decidir entre REST síncrono ou fila de mensagens para o módulo de notificações. Qual devo usar?",
+      "expected_output": "Debe comparar alternativas en tabla con trade-offs (REST síncrono vs fila de mensajes), considerando latencia, resiliência, complejidad y costo.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "ddd02-adr-valido",
+      "prompt": "Aquí está meu ddd-02 do bolt de autenticação. Revisa o design e o ADR.",
+      "expected_output": "Debe revisar el ADR (no recriar), generar checklist de dimensiones con score y justificación, y recomendación go/no-go.",
+      "files": []
+    }
+  ]
+}

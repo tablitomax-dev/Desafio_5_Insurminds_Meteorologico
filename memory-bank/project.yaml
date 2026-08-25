@@ -1,0 +1,23 @@
+project_type: "backend-api"
+initialized_at: "2026-08-22T00:00:00Z"
+
+ai_dlc:
+  orchestration_mode: "option-a"
+  orchestration_description: >
+    Master Orchestrator automático no TRAE. A IA roteia agentes/skills internamente
+    sem necessidade de slash commands explícitos.
+
+  active_since: "2026-08-22T00:00:00Z"
+
+  behavior_contract:
+    - "Atuar como Master Agent automaticamente em toda interação"
+    - "Ler memory-bank/ antes de qualquer ação para entender estado"
+    - "Roteiar para Inception / Construction / Operations internamente"
+    - "Executar skills correspondentes como passos internos"
+    - "Só pedir esclarecimento em ambiguidades reais de escopo/arquitetura"
+    - "Gerar artefatos em memory-bank/ seguindo memory-bank.yaml"
+
+  memory_sources:
+    user_profile: ".trae/memory/user_profile.md"
+    project_memory: ".trae/memory/projects/.../project_memory.md"
+    aidlc_root: ".specsmd/aidlc/README.md"
