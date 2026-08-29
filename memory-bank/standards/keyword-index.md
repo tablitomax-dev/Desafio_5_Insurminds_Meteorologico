@@ -68,6 +68,15 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 
 ---
 
+### Domínio / Operação Keywords (intent 001)
+
+| Keyword | Referência | Context (1 linha) |
+|---------|------------|-------------------|
+| `ci` | intent 001-repository-quality-foundation | Workflow CI/quality em PRs para main; bootstrap valida npm ci (`--if-present` até scripts reais). |
+| `squash merge` | intent 001-repository-quality-foundation | Política: only squash na main (story-2; enforçamento na UI do GitHub). |
+
+---
+
 ### Domínio Keywords (a preencher quando houver Intent)
 
 *(Será adicionado na fase de Inception, quando criarmos a primeira Intent/Story)*

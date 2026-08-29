@@ -13,7 +13,10 @@
 
 ## Status Atual
 
-Nenhum Intent criado ainda.
+Intent ativo: `001-repository-quality-foundation` (1 unit, 2 stories,
+bolt `001-bootstrap-ci-and-merge-governance` em execução na branch
+`chore/ci-and-merge-governance`). Ver
+[intents/001-repository-quality-foundation/story-index.md](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/intents/001-repository-quality-foundation/story-index.md)
 
 ## Próximo Passo
 

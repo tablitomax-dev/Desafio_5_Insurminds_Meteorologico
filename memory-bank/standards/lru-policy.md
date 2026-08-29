@@ -49,13 +49,23 @@ Quando 🔴 Hard Stop disparar e Recovery R1 rodar, além de compactar bolts:
 
 ---
 
-## Ativação
+## Estado
 
-- **Status atual**: *Documentado, não ativado.* Ainda não há artefatos suficientes para valer a pena.
-- **Quando ativar**:
-  1. Quando houver ≥ 20 bolts concluídos (volume suficiente para 80/20 valer a pena)
-  2. Ou após 3 ocorrências de 🟠 warning laranja por excesso de contexto em sessões STANDARD
-- **Processo de ativação**: Criar ADR-004 alterando este standard de `optional` → `required` + patch em analyze-context para aplicar a ordenação antes de carregar.
+Esta política é **experimental e está desativada**.
+
+A ativação só será considerada quando houver, no mínimo:
+- 20 bolts registrados; ou
+- três ocorrências documentadas de warning laranja (🟠) de contexto.
+
+A adoção requer **ADR específico** que defina:
+- algoritmo e parâmetros;
+- métricas de recuperação;
+- garantias para standards obrigatórios;
+- mecanismo de rollback;
+- impacto de custo e precisão.
+
+Até lá, a recuperação usa hierarquia de leitura, intent/bolt ativo,
+relevância por keywords e orçamento de contexto.
 
 ---
 

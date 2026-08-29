@@ -1,1 +1,2 @@
 slug,name,status,created_at,last_touched_at,unit_count,story_count,active_bolt,owner,priority,read_when_keywords
+001-repository-quality-foundation,Repository Quality Foundation,active,2026-08-25,2026-08-25,1,2,001-bootstrap-ci-and-merge-governance,pablo,P0,"governanca,ci,squash merge,contratos agentes,main protegida"

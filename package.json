@@ -1,8 +1,8 @@
 {
-  "name": "desafio-5-tempo",
+  "name": "desafio-5-insurminds-meteorologico",
   "version": "0.1.0",
   "private": true,
-  "description": "Desafio 5 Tempo - AI-DLC memory bank tooling",
+  "description": "Desafio 5 Insurminds Meteorologico - AI-DLC memory bank tooling",
   "dependencies": {
     "fs-extra": "^11.2.0",
     "js-yaml": "^4.1.0"

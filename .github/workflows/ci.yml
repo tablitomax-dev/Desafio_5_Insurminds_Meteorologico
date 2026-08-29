@@ -1,0 +1,47 @@
+# CI bootstrap — gate mínimo de qualidade de infraestrutura.
+#
+# HONESTIDADE DE GATE (ver critérios de aceite do intent
+# 001-repository-quality-foundation): ainda NÃO existem scripts de
+# lint/test/build no package.json. O que este workflow prova hoje é que
+# o repositório instala de forma reproduzível (npm ci determinístico).
+# Quando scripts reais existirem (stack Python: pytest/ruff/mypy ou
+# npm scripts), remover o `--if-present` e torná-los mandatórios aqui.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (reproduzível)
+        run: npm ci
+
+      # Bootstrap: não-mandatórios até existirem (ver comentário acima).
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Build
+        run: npm run build --if-present
