@@ -44,6 +44,20 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-08-29] Operação: policy_update (aprovação flexível — contexto acadêmico)
+
+- **Trigger**: decisão humana explícita — remover bloqueio de aprovação por outra pessoa; trabalho acadêmico exige fluxo mais flexível
+- **Artefatos tocados (3)**: standards/git-and-collaboration.md (v1.2.0), CONTRIBUTING.md (raiz), standards/_index.csv
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso
+- **Detalhes**:
+  - 1. `git-and-collaboration.md` v1.2.0: aprovação deixa de ser bloqueante (recomendada); status checks e conversas resolvidas viram recomendados; PR obrigatório, squash e proibição de force push mantidos
+  - 2. `CONTRIBUTING.md` (raiz): regras essenciais e fluxo (passo 10) alinhados à nova política
+  - 3. `AGENTS.md` (raiz): sem alteração — proibições de agente (não mergear/aprovar) e aprovação humana para o agente agir permanecem
+  - 4. Ação humana pendente no GitHub: desmarcar "Require approvals" na branch protection de `main` (e, se desejado, "require branches up to date" e "conversation resolution")
+
+---
+
 ### [2026-08-25] Operação: policy_update (model-agnostic)
 
 - **Trigger**: decisão humana explícita — a stack não deve estar acoplada a um modelo LLM; qualquer modelo pode ser usado por sessão
