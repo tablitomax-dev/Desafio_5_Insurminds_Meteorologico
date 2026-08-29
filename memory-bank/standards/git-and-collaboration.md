@@ -1,7 +1,7 @@
 # Padrões de Git e colaboração
 
-version: 1.1.0
-effective_date: 2026-08-25
+version: 1.2.0
+effective_date: 2026-08-29
 owner: Master Agent (AI-DLC Option A)
 status: required
 
@@ -11,8 +11,11 @@ status: required
 
 - **Fonte de verdade**: GitHub. `main` é protegida e só recebe mudanças via PR.
 - Uma Issue/tarefa por branch. Nunca compartilhar branch entre pessoas/agentes.
-- Todo PR exige **1 aprovação** de desenvolvedor diferente do autor; aprovações são invalidadas a cada novo push (dismiss stale).
-- Status checks devem passar; conversas de review resolvidas; branch atualizada contra `main` antes do merge.
+- Todo PR deve ser **revisado**; **aprovação é recomendada, não bloqueante**
+  (contexto acadêmico — decisão 2026-08-29). O autor pode mergear o próprio
+  PR após revisão, sem depender de aprovação de outra pessoa.
+- Status checks e conversas de review resolvidas: **recomendados**, não
+  bloqueiam o merge em contexto acadêmico.
 - Método de merge padrão: **squash merge** (política; os outros métodos do GitHub são exceção explícita, não rotina).
 - Force push e bypass em `main`: proibidos (enforcement do GitHub aplica-se inclusive a admins).
 - Agentes aguardam aprovação humana para qualquer operação Git de escrita.

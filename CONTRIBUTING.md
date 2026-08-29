@@ -13,9 +13,10 @@ permanecer estável.
 
 - Nunca faça commit ou push direto para `main`.
 - Toda mudança entra por Pull Request.
-- Todo PR exige uma aprovação do outro desenvolvedor.
-- CI obrigatório deve estar verde.
-- Todas as conversas de review devem estar resolvidas.
+- Todo PR deve ser **revisado**; aprovação é **recomendada, não bloqueante**
+  (contexto acadêmico — o autor pode mergear o próprio PR após revisão).
+- CI deve estar verde quando existir (recomendado, não bloqueante).
+- Conversas de review devem ser resolvidas quando possível.
 - Use `Squash and merge`, salvo decisão explícita diferente.
 - Nunca force push em `main`.
 - Use o GitStudio para revisar histórico, branch, diffs e conflitos.
@@ -49,7 +50,7 @@ permanecer estável.
 
 8. Resolver conflitos conscientemente e rodar testes novamente.
 9. Abrir PR para `main`.
-10. Receber revisão e aprovação.
+10. Receber revisão (aprovação recomendada, não bloqueante).
 11. Fazer squash merge.
 12. Atualizar `main` local:
 
