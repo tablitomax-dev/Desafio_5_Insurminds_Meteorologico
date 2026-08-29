@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-08-25T00:00:00Z
-total_decisions: 4
+last_updated: 2026-08-29T00:00:00Z
+total_decisions: 5
 ---
 
 # Decision Index
@@ -67,3 +67,13 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
 - **Path**: `standards/context-budget.yaml` (v2.0.0) | `standards/keyword-index.md`
 - **Summary**: O projeto NÃO fica acoplado a um modelo específico (ex.: DeepSeek V4 Flash, ADR-003). Qualquer LLM pode ser usado por sessão, a critério do usuário. O `context-budget.yaml` passa a descrever um perfil genérico: os caps (hard cap 250k, artefato único 16k) são política do projeto e, se o modelo ativo tiver janela menor que 1M, o orçamento ativo da sessão é min(caps, 25% da janela real). Diretrizes de custo ficam genéricas (cache hit < cache miss; output costuma ser o token mais caro), sem preços de provider. Menções a DeepSeek foram removidas da stack/standards ativos; o histórico permanece aqui nos ADR-002/003 para rastreabilidade.
 - **Read when**: Sempre que configurar o modelo de uma sessão, revisar budgets, ou perguntar sobre seleção de LLM/custo/cache/thinking mode.
+
+---
+
+### ADR-005: Open-Meteo como fonte meteorológica do MVP (Ports & Adapters)
+- **Status**: accepted
+- **Date**: 2026-08-29
+- **Bolt**: N/A (decisão rodada no Inception do intent 002, aprovada pelo humano)
+- **Path**: `intents/002-proactive-communication/units/weather-monitoring.md`
+- **Summary**: A fonte de dados do desafio I2A2 será **Open-Meteo** (API pública aberta, sem API key, cobertura global/BR, resposta com weathercode/precipitação/vento no endpoint forecast). Acesso isolado atrás da port `WeatherProvider` (Protocol) + adapter `OpenMeteoProvider` — trocar de fonte no futuro é barato. Alternativas consideradas: OpenWeatherMap (exige key gratuita + rate limit = atrito de demo), INMET (alertas oficiais BR, porém API menos estável para granularidade por cidade), DUAS fontes (demonstra adapter melhor, custo extra fora do MVP). Decisão dirigida por: zero atrito de credenciais na demonstração (banca/parceiro roda sem setup), documentação estável, e a exigência do enunciado é UMA fonte "devidamente documentada".
+- **Read when**: Ao implementar/alterar weather-monitoring, ao avaliar trocar/adicionar fonte meteorológica, ou ao explicar a fonte na entrega.
