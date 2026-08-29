@@ -3,6 +3,7 @@ tech-stack,Tech Stack,standard,active,2026-08-22,2026-08-22,required,"python,fas
 coding-standards,Coding Standards,standard,active,2026-08-22,2026-08-22,required,"ruff,mypy strict,ddd modular,tdd,sdd,coverage 80/100",""
 system-architecture,System Architecture,standard,active,2026-08-22,2026-08-22,required,"monolito modular,hexagonal,ports and adapters,cqrs opcional",""
 decision-index,Decision Index,standard,active,2026-08-22,2026-08-22,required,"adr,decisao arquitetural",""
-context-budget,Context Budget,standard,active,2026-08-22,2026-08-22,required,"budget,contexto,warning,overflow,hard stop,alucinacao,llm,deepseek v4 flash,cache hit,thinking mode,opt-13","ADR-003"
+context-budget,Context Budget,standard,active,2026-08-22,2026-08-25,required,"budget,contexto,warning,overflow,hard stop,alucinacao,llm,model agnostic,cache hit,thinking mode,opt-13","ADR-003,ADR-004"
 keyword-index,Keyword Index,standard,active,2026-08-22,2026-08-22,required,"keyword,indice invertido,palavra-chave,linguagem ubiqua",""
 lru-policy,LRU Heuristic Policy,standard,active,2026-08-22,2026-08-22,optional,"lru,recencia,last touched,otimizacao contexto,carregamento",""
+git-and-collaboration,Git and Collaboration,standard,active,2026-08-25,2026-08-25,required,"git,branch,pr,pull request,merge,squash,revisao,aprovacao,colaboracao,conflito",".trae/CONTRIBUTING.md"

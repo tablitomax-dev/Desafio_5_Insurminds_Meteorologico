@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-08-22T00:00:00Z
-total_decisions: 3
+last_updated: 2026-08-25T00:00:00Z
+total_decisions: 4
 ---
 
 # Decision Index
@@ -56,3 +56,14 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
   4. **OPT-13 — Cache-Aware Loading**: DeepSeek cobra $0.0028/M (cache hit) vs $0.14/M (cache miss) = **50x**. Ordem de carregamento FIXA e determinística (schema → budget → ADRs → keyword-index → _index.csv → conteúdo variável por último) para maximizar prefixo cacheado. Maior ROI de custo.
   5. **Thinking mode**: non-thinking para skills de diagnóstico (analyze-context, route-request, answer-question, explain-flow, bolt-list, bolt-status, intent-list, navigator); thinking mantido para construção (bolt-start, requirements, story-create, units, vibe-to-spec, prototype-apply, build, bolt-replan). Output é o token mais caro ($0.28/M).
 - **Read when**: Sempre que rodar analyze-context, revisar budgets, configurar cliente DeepSeek, ou perguntar sobre custo/cache/thinking mode.
+
+---
+
+### ADR-004: Orçamento de contexto MODEL-AGNOSTIC (desacoplamento do modelo LLM)
+- **Status**: accepted
+- **Date**: 2026-08-25
+- **Supersedes**: parcialmente ADR-003 (apenas o perfil do modelo alvo e preços DeepSeek; caps 250k/16k, profundidades, OPT-13 e política de thinking mode permanecem como estratégias gerais)
+- **Bolt**: N/A (decisão de política do projeto)
+- **Path**: `standards/context-budget.yaml` (v2.0.0) | `standards/keyword-index.md`
+- **Summary**: O projeto NÃO fica acoplado a um modelo específico (ex.: DeepSeek V4 Flash, ADR-003). Qualquer LLM pode ser usado por sessão, a critério do usuário. O `context-budget.yaml` passa a descrever um perfil genérico: os caps (hard cap 250k, artefato único 16k) são política do projeto e, se o modelo ativo tiver janela menor que 1M, o orçamento ativo da sessão é min(caps, 25% da janela real). Diretrizes de custo ficam genéricas (cache hit < cache miss; output costuma ser o token mais caro), sem preços de provider. Menções a DeepSeek foram removidas da stack/standards ativos; o histórico permanece aqui nos ADR-002/003 para rastreabilidade.
+- **Read when**: Sempre que configurar o modelo de uma sessão, revisar budgets, ou perguntar sobre seleção de LLM/custo/cache/thinking mode.

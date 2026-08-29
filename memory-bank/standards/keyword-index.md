@@ -45,10 +45,10 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 
 | Keyword | ADR Reference | Context (1 linha) |
 |---------|---------------|-------------------|
-| `orquestracao automatica` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Tempo/memory-bank/standards/decision-index.md) | Opção A do AI-DLC: Master Agent roteia sem slash commands. |
-| `opcao a` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Tempo/memory-bank/standards/decision-index.md) | Idem. |
-| `ai-dlc` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Tempo/memory-bank/standards/decision-index.md) | Ciclo de vida: Inception → Construction → Operations. |
-| `budget contexto` | ADR-002 (ver decision-index.md) | Política de 3 níveis warning + hard cap 120k tokens/sessão. |
+| `orquestracao automatica` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Opção A do AI-DLC: Master Agent roteia sem slash commands. |
+| `opcao a` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Idem. |
+| `ai-dlc` | [ADR-001](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Ciclo de vida: Inception → Construction → Operations. |
+| `budget contexto` | ADR-002 (ver decision-index.md) | Política de 3 níveis warning. Hard cap atual: 250k tokens/sessão (ADR-003). |
 | `overflow contexto` | ADR-002 | Previne alucinação por janela cheia: 80%/90%/95%. |
 | `warning budget` | ADR-002 | 🟡80% inline | 🟠90% pause 3 opções | 🔴95% Hard Stop 2 rotas. |
 | `grafo codigo` | ADR-002 | Graphify atualiza automático: 5 .py | 10 .md | 24h | antes Construction. |
@@ -58,13 +58,13 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 | `lru contexto` | ADR-002 | Heurística last_touched_at para só carregar artefatos recentes. |
 | `integrity check` | ADR-002 | Step 0 OBRIGATÓRIO antes de abrir qualquer conteúdo de arquivo. |
 | `bolt summary compact` | ADR-002 | Template ~500 tokens por bolt concluído, substitui ler ddd-01/02/03 brutos (~45k). |
-| `deepseek v4 flash` | [ADR-003](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Tempo/memory-bank/standards/decision-index.md) | Modelo alvo: janela 1M, max output 384K, $0.14/$0.28 por 1M. |
-| `cache hit` | ADR-003 | $0.0028/M vs $0.14/M cache miss = 50x. Prefixo estável = cache hit. |
+| `cache hit` | ADR-004 | Cache hit é mais barato que cache miss. Prefixo estável do prompt = economia (magnitude depende do modelo). |
 | `cache aware loading` | ADR-003 | OPT-13: ordem fixa de carregamento (schema → budget → ADRs → keyword → _index.csv → variável por último). |
 | `opt-13` | ADR-003 | Cache-Aware Context Loading. Maior ROI de custo. |
 | `thinking mode` | ADR-003 | Non-thinking em diagnóstico; thinking em construção (output é o token mais caro). |
 | `non thinking` | ADR-003 | analyze-context, route-request, answer-question, explain-flow, bolt-list, bolt-status, intent-list, navigator. |
-| `hard cap 250k` | ADR-003 | 25% da janela 1M. Substitui 120k do ADR-002. |
+| `hard cap 250k` | ADR-003 | 25% da janela 1M. Substitui 120k do ADR-002. Cap do projeto; proporcional à janela se o modelo ativo for menor (ADR-004). |
+| `model agnostic` | [ADR-004](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Desacoplamento do modelo LLM: qualquer modelo por sessão; caps na min(caps do projeto, 25% da janela). |
 
 ---
 
