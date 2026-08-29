@@ -1,30 +1,33 @@
-version: 1.1.0
-project: Desafio_5_Tempo
-effective_date: 2026-08-22
+version: 2.0.0
+project: Desafio_5_Insurminds_Meteorologico
+effective_date: 2026-08-25
 owner: Master Agent (AI-DLC Option A)
 
 description: >
-  Orçamento de contexto LLM determinístico para o AI-DLC.
-  Modelo alvo: DeepSeek V4 Flash (janela 1M tokens, max output 384K).
+  Orçamento de contexto LLM determinístico e MODEL-AGNOSTIC para o AI-DLC.
+  O modelo não é fixo: qualquer LLM pode ser usado numa sessão.
   Proxy de tokens: 4 chars UTF-8 ≈ 1 token + margem de segurança de 20%.
   Níveis de warning: 80% 🟡 | 90% 🟠 | 95% 🔴 (Hard Stop).
-  Revisão 1.1.0 (ADR-003): hard cap 120k → 250k (25% da janela 1M),
-  corrige inconsistência analyze-context vs depth_levels, adiciona OPT-13
-  (cache-aware loading) e política de thinking mode.
+  Revisão 2.0.0 (ADR-004): o perfil do modelo passa a ser genérico
+  (antes acoplado a um modelo específico — histórico em ADR-003).
+  Caps, profundidades, cache-aware loading e política de thinking mode
+  são mantidos como estratégias gerais, independentes do modelo em uso.
 
 ---
 model_profile:
-  name: "deepseek-v4-flash"
-  context_window_tokens: 1048576  # 1M
-  max_output_tokens: 384000
-  thinking_mode: "supported (default ON via API)"
-  pricing_per_1M:
-    input_cache_miss_usd: 0.14
-    input_cache_hit_usd: 0.0028   # 50x mais barato que cache miss
-    output_usd: 0.28              # token mais caro
+  name: "model-agnostic"
+  # Qualquer modelo conforme disponibilidade/custo da sessão.
+  assumptions:
+    context_window_tokens: 1048576  # base de cálculo (1M)
+    max_output_tokens: 384000
+  rule: >
+    Se o modelo ativo tiver janela menor que 1M tokens, o orçamento ATIVO
+    da sessão é min(caps abaixo, 25% da janela real do modelo em uso).
   cost_implication: >
-    CACHE HIT é o fator dominante de custo (50x). Prefixo estável = cache hit.
-    OUTPUT é o token mais caro → evitar thinking mode em skills de diagnóstico.
+    Diretrizes gerais independentes de modelo:
+    CACHE HIT é mais barato que cache miss → prefixo estável economiza.
+    OUTPUT costuma ser o token mais caro → evitar reasoning excessivo
+    em tarefas de diagnóstico.
 
 proxy:
   chars_per_token: 4
@@ -36,8 +39,9 @@ hard_caps:
     chars: 833333
     tokens: 250000
     description: >
-      Limite máximo por sessão TRAE = 25% da janela 1M do DeepSeek V4 Flash.
-      Margem enorme para 384k output + thinking. Nunca ultrapassar.
+      Limite máximo por sessão TRAE = 25% da janela de referência de 1M tokens.
+      Se o modelo ativo tiver janela menor, cap proporcional (ADR-004).
+      Margem para output + thinking. Nunca ultrapassar.
   artifact_load_single:
     chars: 51200
     tokens: 16000
@@ -98,15 +102,15 @@ budget_per_skill:
     monitor: 2400
     verify: 4800
 
-# OPT-13 (ADR-003): Cache-Aware Context Loading
-# DeepSeek cobra $0.0028/M (cache hit) vs $0.14/M (cache miss) = 50x.
-# analyze-context roda em TODA interação → prefixo estável = cache hit = custo mínimo.
+# OPT-13 (ADR-003, generalizado em ADR-004): Cache-Aware Context Loading
+# Todo LLM com cache de prompt cobra cache hit mais barato que cache miss.
+# analyze-context roda em TODA interação → prefixo estável = cache hit = economia.
 cache_aware_loading:
   enabled: true
   principle: >
     Ordem de carregamento FIXA e DETERMINÍSTICA. Conteúdo estável SEMPRE primeiro,
     conteúdo variável SEMPRE por último. Assim o prefixo do prompt é idêntico entre
-    chamadas e o cache do DeepSeek reutiliza os tokens estáveis.
+    chamadas e o cache do modelo ativo reutiliza os tokens estáveis.
   fixed_load_order:
     - "1. .specsmd/aidlc/memory-bank.yaml (schema — estável, sempre primeiro)"
     - "2. memory-bank/standards/context-budget.yaml (budget — estável)"
@@ -119,10 +123,10 @@ cache_aware_loading:
     - "NUNCA reordenar os itens 1-5 entre chamadas (mesma ordem sempre)."
     - "Se um item estável não for necessário, carregar mesmo assim (vazio) para manter prefixo."
     - "Conteúdo variável (item 6) muda por sessão — é o único custo de cache miss esperado."
-  expected_savings: "50x no custo de input dos itens estáveis (1-5)."
+  expected_savings: "Cache hit em todo o prefixo estável (1-5). A magnitude da economia depende do modelo/provider em uso."
 
-# Política de Thinking Mode (ADR-003)
-# Output é o token mais caro ($0.28/M). Thinking mode consome output tokens.
+# Política de Thinking Mode (ADR-003, generalizada em ADR-004)
+# Output tende a ser o token mais caro. Thinking mode consome output tokens.
 thinking_mode:
   policy: "non_thinking_for_diagnostic"
   non_thinking_skills:

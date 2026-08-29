@@ -5,8 +5,8 @@ node_modules/
 *.log
 .graph-last-updates.log
 
-# Artefatos locais / ferramentas
-.trae/
+# Artefatos locais / ferramentas (contratos em .trae/ SÃO versionados:
+# canônicos ficam na raiz — AGENTS.md, CONTRIBUTING.md; pontes ficam aqui)
 .claude/
 .specsmd/
 
