@@ -77,9 +77,16 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 
 ---
 
-### Domínio Keywords (a preencher quando houver Intent)
+### Domínio Keywords (intent 002 — comunicação proativa)
 
-*(Será adicionado na fase de Inception, quando criarmos a primeira Intent/Story)*
+| Keyword | Referência | Context (1 linha) |
+|---------|------------|-------------------|
+| `open-meteo` | ADR-005 + unit weather-monitoring | Fonte meteorológica do MVP: API aberta sem key, atrás da port `WeatherProvider`. |
+| `weathercode` | unit weather-monitoring | Código numérico Open-Meteo mapeado para `WeatherCondition` (rainy/hail/windy/clear). |
+| `risk rules` | unit risk-detection | Motor puro de regras: HeavyRain→residencial; Hail→auto; StrongWind→costeira. Núcleo TDD sem I/O. |
+| `alerta proativo` | intent 002-proactive-communication | Capacidade do desafio I2A2: avisar segurado antes do sinistro a partir de eventos externos. |
+| `llm opcional` | story-06-llm-optional | Template determinístico sempre; LLM (Pydantic AI, model agnostic) via env com fallback ao template. |
+| `envio simulado` | unit notification-sim | Simulação de SMS/push no console + NotificationRecord; port isolada para provider real futuro. |
 
 ---
 
