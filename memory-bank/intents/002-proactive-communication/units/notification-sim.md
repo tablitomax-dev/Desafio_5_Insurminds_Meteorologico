@@ -1,7 +1,7 @@
 # Unit — notification-sim
 
 > Intent: 002-proactive-communication | Stage: infrastructure (simulação)
-> Status: `planned`
+> Status: `done` (bolt 002-1)
 
 ## Objetivo
 

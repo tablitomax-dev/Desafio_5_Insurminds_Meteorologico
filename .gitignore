@@ -4,6 +4,7 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+.venv/
 
 # Auditoria local do orquestrador AI-DLC (fase 2 — artefato gerado)
 tools/ai-dlc/runs.jsonl

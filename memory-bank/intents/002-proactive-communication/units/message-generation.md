@@ -1,7 +1,7 @@
 # Unit — message-generation
 
 > Intent: 002-proactive-communication | Stage: application
-> Status: `planned`
+> Status: `in_progress` (TemplateGenerator ✓ bolt 002-1; LlmGenerator → bolt 002-3)
 
 ## Objetivo
 
