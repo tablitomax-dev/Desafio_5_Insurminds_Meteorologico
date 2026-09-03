@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-08-29T00:00:00Z
-total_decisions: 5
+last_updated: 2026-09-01T00:00:00Z
+total_decisions: 6
 ---
 
 # Decision Index
@@ -77,3 +77,14 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
 - **Path**: `intents/002-proactive-communication/units/weather-monitoring.md`
 - **Summary**: A fonte de dados do desafio I2A2 será **Open-Meteo** (API pública aberta, sem API key, cobertura global/BR, resposta com weathercode/precipitação/vento no endpoint forecast). Acesso isolado atrás da port `WeatherProvider` (Protocol) + adapter `OpenMeteoProvider` — trocar de fonte no futuro é barato. Alternativas consideradas: OpenWeatherMap (exige key gratuita + rate limit = atrito de demo), INMET (alertas oficiais BR, porém API menos estável para granularidade por cidade), DUAS fontes (demonstra adapter melhor, custo extra fora do MVP). Decisão dirigida por: zero atrito de credenciais na demonstração (banca/parceiro roda sem setup), documentação estável, e a exigência do enunciado é UMA fonte "devidamente documentada".
 - **Read when**: Ao implementar/alterar weather-monitoring, ao avaliar trocar/adicionar fonte meteorológica, ou ao explicar a fonte na entrega.
+
+---
+
+### ADR-006: Orquestrador secundário como camada subordinada de execução (AI-DLC tooling)
+- **Status**: accepted
+- **Date**: 2026-09-01
+- **Supersedes**: nenhum (complementa ADR-001 e ADR-004)
+- **Bolt**: N/A (decisão de Inception do pacote `tools/ai-dlc/`, aprovada pelo humano — sessão de grilling Q1–Q13)
+- **Path**: `docs/decisions/006-orchestrator-secondary-execution-layer.md` | `tools/ai-dlc/` (`ai-dlc-spec.yaml`, `ai_dlc_orchestrator.py`, `contracts.py`)
+- **Summary**: O rascunho externo de orquestração ("AI-DLC v0.6.x") foi recriado e adaptado como camada de execução SUBORDINADA ao Master Agent (ADR-001): loops/gates/roteamento vivem em código Python testável em `tools/ai-dlc/`, não em policy YAML (esboço `agent-orchestration.yaml` descartado pelo usuário). Fase 1 = stubs tipados determinísticos (`call_executor_llm`/`call_independent_critic`), sem rede e sem deps novas; fase 2 = bolt próprio com executor real via OpenRouter (deps com checkpoint). Níveis unificados com depth_levels (N1=TINY, N2=STANDARD, N3=DEEP; máx. 3/5/7 iterações). Gates: N1/N2 autônomos, N3 com dupla confirmação humana; `.trae/rules/` NÃO criada (project_rules.md é a única fonte). Stop rule: success = tests_pass E acceptance_criteria_met E critic=accept. Binding definitivo (2026-09-01, validado na API pública do OpenRouter): fast `~deepseek/deepseek-v4-flash-latest` (alias `~` obrigatório) effort low; balanced/deep `z-ai/glm-5.3-flash` effort high/max (GLM só aceita max/high/low, mandatory); crítico `openai/gpt-5.6-luna-pro` effort max no endpoint `openai/flex`; whitelist de endpoints por tags (`z-ai/fp8`, `baidu/fp8`, …), fallback só entre endpoints; persistência de auditoria REAL via `write_maintenance_entry()` (append por run). Model-agnostic mantido via env `OPENROUTER_MODEL_FAST/BALANCED/DEEP/CRITIC` (ADR-004).
+- **Read when**: Ao implementar/alterar `tools/ai-dlc/`, configurar binding de modelos, decidir gates/stop rules de orquestração, ou ao perguntar sobre o rascunho externo AI-DLC v0.6.x.

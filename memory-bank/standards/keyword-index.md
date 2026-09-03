@@ -65,6 +65,7 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 | `non thinking` | ADR-003 | analyze-context, route-request, answer-question, explain-flow, bolt-list, bolt-status, intent-list, navigator. |
 | `hard cap 250k` | ADR-003 | 25% da janela 1M. Substitui 120k do ADR-002. Cap do projeto; proporcional à janela se o modelo ativo for menor (ADR-004). |
 | `model agnostic` | [ADR-004](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Desacoplamento do modelo LLM: qualquer modelo por sessão; caps na min(caps do projeto, 25% da janela). |
+| `orquestrador secundario` | [ADR-006](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/standards/decision-index.md) | Camada de execução subordinada (tools/ai-dlc/): loops, gates e roteamento como código; stubs na fase 1. |
 
 ---
 
@@ -90,6 +91,11 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 
 ---
 
-### Técnicas / Implementação Keywords
+### Técnicas / Implementação Keywords (ADR-006 — AI-DLC tooling)
 
-*(Será adicionado durante Construction/Operations)*
+| Keyword | Referência | Context (1 linha) |
+|---------|------------|-------------------|
+| `capacity contract` | ADR-006 + tools/ai-dlc/contracts.py | Contrato de capacidade: ok/warning/blocked; blocked ⇒ blocker_type obrigatório e sem autonomia. |
+| `blocker type` | ADR-006 | 6 tipos: missing_credentials, missing_product_decision, ambiguous_requirement, destructive_next_step, non_reproducible_error, stagnation. |
+| `dupla confirmacao` | ADR-006 | Gate N3 (DEEP): exige dupla confirmação humana antes de executar; N1/N2 autônomos. |
+| `stop rule` | ADR-006 | success = tests_pass E acceptance_criteria_met E critic=accept; senão repair até max_iterations (estagnação → blocked). |
