@@ -44,6 +44,21 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-1 domain-core + primeiro run real do orquestrador)
+
+- **Trigger**: autorização humana ("voltar ao intent 002 e prosseguir usando a nova estrutura de orquestração"); modo escolhido: run_loop completo por bolt, 3 PRs (domain-core → collection-pipeline → llm-optional)
+- **Artefatos tocados (25)**: app/{__init__.py, domain/{weather,holders,risk,messages,notify}.py}, pytest.ini, tests/domain/{test_weather,test_holders,test_risk,test_messages,test_notify}.py, tools/ai-dlc/run_bolt.py, bolts/002-domain-core/{bolt.md, execution-log.md}, bolts/_index.csv, intents/_index.csv, intents/002-proactive-communication/{story-index.md, units/{risk-detection,message-generation,notification-sim,weather-monitoring,policy-holders}.md}, maintenance-log
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso (177 testes pytest = 65 produto + 112 ai-dlc)
+- **Detalhes**:
+  - 1. Núcleo de domínio 100% TDD (vermelho→verde): VOs WMO (`WeatherSnapshot`/`WeatherCondition`/`classify_weathercode`), `PolicyHolder`+`InsuranceType`, motor de regras (`HeavyRainRule`/`HailRule`/`StrongWindRule` + `RiskEngine` com dedup por (holder, kind)), `TemplateGenerator` (≤480 chars, ≥2 recomendações), `SimulatedSender` — sem I/O, sem dependências novas
+  - 2. Primeiro run REAL do orquestrador (fase 2) em bolt de produto via novo `tools/ai-dlc/run_bolt.py`: executor recebe estado objetivo real (pytest + git status), `verify` injetado roda a suíte de verdade, crítico independente gateia; run auditado em `runs.jsonl`
+  - 3. Run `bolt-002-1-domain-core`: success em 1 iteração (N2 → `code_balanced`); executor `z-ai/glm-5.3-flash` (GMICloud, 1245 tok, US$0.000228); crítico `openai/gpt-5.6-luna-pro` (openai/flex, 13167 tok, US$0.004797, verdict=accept) ≈ US$0.005 o bolt
+  - 4. Modo de operação validado: iteração a iteração (`--max-iterations 1`, correção entre runs) — o loop não pausa entre iterações; stories 02–05 `done` no story-index; units atualizadas
+  - 5. ruff/mypy disponibilizados (autorização humana) em `.venv` local — sandbox bloqueia pip global/user; `ruff.toml` versionado (E4/E7/E9/F/I/B): ruff all checks passed no repo inteiro (B017 → `FrozenInstanceError` nos testes de imutabilidade; 15 auto-fixes de imports), mypy `app/` 0 erros, `tools/ai-dlc` 25 apontamentos herdados da fase 1/2 — dívida de CI Python (fase 3)
+
+---
+
 ### [2026-09-03] Operação: artifact_registration (AI-DLC tooling — fase 2: adapters reais + observabilidade)
 
 - **Trigger**: autorização humana ("execute a fase natural") — backlog da fase 2 do ADR-006; escopo ampliado pelo usuário (dashboard, cost report, `.aiignore`; Telegram adiado para fase 3)

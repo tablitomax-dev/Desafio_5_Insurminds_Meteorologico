@@ -1,7 +1,7 @@
 # Unit — risk-detection
 
 > Intent: 002-proactive-communication | Stage: domain (NÚCLEO TDD)
-> Status: `planned`
+> Status: `done` (bolt 002-1)
 
 ## Objetivo
 

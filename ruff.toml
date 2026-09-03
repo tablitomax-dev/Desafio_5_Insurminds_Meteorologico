@@ -1,0 +1,10 @@
+# Configuração do Ruff — padrão do repo (bolt 002-1).
+# Determinístico: não depende de config global do usuário.
+# Seleção enxuta: erros reais (E4/E7/E9), pyflakes (F), ordenação de
+# imports (I) e bugbear (B). Regras estilísticas (UP/C4/SIM/S/TRY/PLW)
+# ficam fora do gate por ora — dívida documentada para CI de Python (fase 3).
+target-version = "py312"
+line-length = 100
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]

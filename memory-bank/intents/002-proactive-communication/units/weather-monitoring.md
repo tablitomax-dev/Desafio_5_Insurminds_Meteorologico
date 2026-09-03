@@ -1,7 +1,7 @@
 # Unit — weather-monitoring
 
 > Intent: 002-proactive-communication | Stage: infrastructure/domain edge
-> Status: `planned`
+> Status: `in_progress` (VOs + mapeamento WMO ✓ bolt 002-1; port/adapter Open-Meteo → bolt 002-2)
 
 ## Objetivo
 
