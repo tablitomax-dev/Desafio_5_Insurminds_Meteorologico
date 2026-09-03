@@ -1,6 +1,13 @@
 # Dependências
 node_modules/
 
+# Python
+__pycache__/
+*.pyc
+
+# Auditoria local do orquestrador AI-DLC (fase 2 — artefato gerado)
+tools/ai-dlc/runs.jsonl
+
 # Logs
 *.log
 .graph-last-updates.log
