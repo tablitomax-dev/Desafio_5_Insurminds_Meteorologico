@@ -1,15 +1,17 @@
 # ============================================================
-# AI-DLC Orchestrator Spec — v0.1.0 (adaptado Desafio 5)
+# AI-DLC Orchestrator Spec — v0.2.0 (fase 2: adapters reais)
 # Linhagem: rascunho externo v0.6.x (gerador LLM), recriado e
 # adaptado aos padrões deste repo (AGENTS.md, ADR-001/004,
-# context-budget.yaml). Fase 1: política executada em modo stub
-# por ai_dlc_orchestrator.py (sem rede). O loader PyYAML desta
-# spec entra no bolt da fase 2 (checkpoint de dependências).
+# context-budget.yaml). Fase 2: executor e crítico REAIS via
+# OpenRouter (openrouter_client.py, urllib stdlib), spec
+# carregada e validada por spec_loader.py (PyYAML), auditoria
+# JSONL por run (fonte do dashboard Flask) e cost report.
+# Consistência spec↔código validada por spec_loader.check_consistency.
 # ============================================================
 
-version: "0.1.0"
+version: "0.2.0"
 name: "AI-DLC Orchestrator (Desafio 5)"
-status: draft-adapted
+status: active
 adrs: [ADR-006]
 complements: [ADR-001, ADR-004]
 
@@ -114,7 +116,7 @@ capacity_contract:
   blocker_types: [missing_credentials, missing_product_decision, ambiguous_requirement, destructive_next_step, non_reproducible_error, stagnation]
   persistence:
     fase_1: "log_sink em memória (auditável por iteração)"
-    fase_2: "memory-bank/maintenance-log.md — registro por iteração"
+    fase_2: "run_loop(audit_path=...) — 1 linha JSON por run (fonte do dashboard); write_maintenance_entry() mantém o markdown"
 
 # ------------------------------------------------------------
 # GATES
@@ -127,15 +129,26 @@ gates:
     level_3: dual_confirmation   # dupla confirmação humana
 
 # ------------------------------------------------------------
-# ORQUESTRADOR SECUNDÁRIO (herdado da referência v0.6.x)
+# ORQUESTRADOR SECUNDÁRIO — ATIVO desde a fase 2 (2026-09-03)
 # ------------------------------------------------------------
 secondary_orchestrator:
-  enabled: false   # fase 1: stubs; fase 2 (bolt próprio): adapters reais
-  stubs: [call_executor_llm, call_independent_critic]
+  enabled: true
+  transport: "openrouter_client.chat — urllib stdlib (sem SDK), key de OPENROUTER_API_KEY (env) ou registro Windows HKCU\\Environment (nunca impressa)"
+  executor: "call_executor_llm_real(ctx, iteration, profile) — propõe JSON, parse tolerante"
+  critic: "call_independent_critic_real(proposal) — usa CRITIC_PROFILE (openai/gpt-5.6-luna-pro, endpoint openai/flex)"
+  defaults: "run_loop mantém stubs determinísticos por padrão; fns reais são injetadas (executor_fn/critic_fn) — determinismo dos testes preservado"
   triggers:
     tool_failure_streak: 3
     no_progress_iterations: 2
     max_patches_per_task: 3
+
+# ------------------------------------------------------------
+# OBSERVABILIDADE (fase 2)
+# ------------------------------------------------------------
+observability:
+  audit: "append_run_jsonl(path, result) — 1 linha JSON por run"
+  dashboard: "dashboard.create_app(audit_path) — Flask: / (lista de runs), /runs/<n>, /cost-report"
+  cost_report: "cost_report.generate_cost_report — tokens (prompt/completion/total) e custo por perfil"
 
 # ------------------------------------------------------------
 # STOP RULES
@@ -152,11 +165,7 @@ stop_rules:
     - context_budget_hard_stop   # 🔴95% do context-budget.yaml
 
 # ------------------------------------------------------------
-# BACKLOG FASE 2 (bolt próprio, com checkpoints de autorização)
+# BACKLOG FASE 3 (fase 2 concluída — novos bolts com checkpoint)
 # ------------------------------------------------------------
-phase_2_backlog:
-  - "executor real via OpenRouter (deps: pyyaml/openai — instalar com checkpoint)"
-  - "loader PyYAML desta spec + persistência real em maintenance-log.md"
-  - "mapear o critic profile no pipeline do run_loop (fase 2: crítico real)"
-  - "dashboard Flask, generate_cost_report, integração Telegram ('Grill Me')"
-  - "avaliar adoção do .aiignore da referência (config de ferramenta)"
+phase_3_backlog:
+  - "integração Telegram ('Grill Me') — adiado por decisão do usuário (2026-09-03)"

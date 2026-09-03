@@ -99,3 +99,6 @@ Só preencher os campos que tiverem correspondência. Campos vazios são omitido
 | `blocker type` | ADR-006 | 6 tipos: missing_credentials, missing_product_decision, ambiguous_requirement, destructive_next_step, non_reproducible_error, stagnation. |
 | `dupla confirmacao` | ADR-006 | Gate N3 (DEEP): exige dupla confirmação humana antes de executar; N1/N2 autônomos. |
 | `stop rule` | ADR-006 | success = tests_pass E acceptance_criteria_met E critic=accept; senão repair até max_iterations (estagnação → blocked). |
+| `openrouter client` | ADR-006 fase 2 + tools/ai-dlc/openrouter_client.py | Integração OpenRouter via urllib stdlib (sem SDK): reasoning effort + provider.only (tags); key de env/registro, nunca impressa. |
+| `audit jsonl` | ADR-006 fase 2 + tools/ai-dlc/ai_dlc_orchestrator.py | 1 linha JSON por run (`run_loop(audit_path=...)`); fonte do dashboard; linhas corrompidas ignoradas. |
+| `cost report` | ADR-006 fase 2 + tools/ai-dlc/cost_report.py | Agrega tokens (prompt/completion/total) e custo por perfil a partir do `usage` dos records. |

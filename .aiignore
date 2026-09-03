@@ -1,0 +1,18 @@
+# .aiignore — contexto que agentes de IA NÃO devem carregar
+# (adotado da referência AI-DLC v0.6.x na fase 2 do bolt 004;
+#  complementar ao .gitignore — foco em segredos e artefatos locais)
+
+# Segredos e credenciais
+.env
+.env.*
+*.env
+secrets*
+*.key
+*.pem
+**/credentials*
+
+# Artefatos locais gerados por ferramentas
+tools/ai-dlc/runs.jsonl
+__pycache__/
+*.pyc
+node_modules/

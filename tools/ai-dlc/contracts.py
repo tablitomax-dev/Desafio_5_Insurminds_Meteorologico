@@ -131,6 +131,10 @@ class ExecutorProposal(BaseModel):
     tests_pass: bool
     acceptance_criteria_met: bool
     notes: list[str] = Field(default_factory=list)
+    # Metadados de uso (fase 2, chamadas reais; default None nos stubs)
+    model: str | None = None
+    provider: str | None = None
+    usage: dict | None = None
 
 
 class CriticReview(BaseModel):
@@ -140,6 +144,10 @@ class CriticReview(BaseModel):
     verdict: Literal["accept", "repair", "blocked"]
     reason: str
     risk_notes: list[str] = Field(default_factory=list)
+    # Metadados de uso (fase 2, chamadas reais; default None nos stubs)
+    model: str | None = None
+    provider: str | None = None
+    usage: dict | None = None
 
 
 class IterationRecord(BaseModel):
@@ -162,3 +170,4 @@ class LoopResult(BaseModel):
     profile: str
     blocker_type: BlockerType | None = None
     records: list[IterationRecord] = Field(default_factory=list)
+    task_id: str = ""  # preenchido pelo run_loop (auditoria/dashboard)

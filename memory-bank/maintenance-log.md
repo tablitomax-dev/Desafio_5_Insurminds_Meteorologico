@@ -44,6 +44,22 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-03] Operação: artifact_registration (AI-DLC tooling — fase 2: adapters reais + observabilidade)
+
+- **Trigger**: autorização humana ("execute a fase natural") — backlog da fase 2 do ADR-006; escopo ampliado pelo usuário (dashboard, cost report, `.aiignore`; Telegram adiado para fase 3)
+- **Artefatos tocados (14)**: tools/ai-dlc/{openrouter_client.py, spec_loader.py, cost_report.py, dashboard.py, smoke_phase2.py, ai_dlc_orchestrator.py, contracts.py, ai-dlc-spec.yaml, README.md, tests/test_spec_loader.py, tests/test_openrouter_client.py, tests/test_real_loops.py, tests/test_cost_report.py, tests/test_observability.py}, .aiignore (novo), .gitignore, docs/tasks/004-ai-dlc-phase2-real-executor.md, standards/keyword-index.md, standards/_index.csv
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso (112 testes pytest = 56 fase 1 + 56 novos)
+- **Detalhes**:
+  - 1. Executor e crítico REAIS via OpenRouter (`openrouter_client.py`, urllib stdlib — sem SDK nova; pyyaml/flask/openai já presentes no ambiente): assinaturas da fase 1 preservadas, fns reais injetadas via `real_functions()`; erros de rede viram proposal/review anotada (loop nunca derruba)
+  - 2. Spec v0.2.0 (`secondary_orchestrator.enabled: true`); loader PyYAML (`spec_loader.py`) valida consistência spec↔código (perfis, routing); Telegram movido para `phase_3_backlog`
+  - 3. Observabilidade: auditoria JSONL por run (`run_loop(audit_path=...)`), dashboard Flask (rotas `/`, `/runs/<n>`, `/cost-report`), `generate_cost_report` (tokens/custo por perfil); contratos ganham `model/provider/usage` e `LoopResult.task_id`
+  - 4. `.aiignore` adotado da referência (segredos + artefatos locais); `__pycache__/` e `tools/ai-dlc/runs.jsonl` no `.gitignore`
+  - 5. Key OPENROUTER_API_KEY: leitura centralizada (`read_api_key`: env → registro HKCU); key ausente → `missing_credentials_decision()` canônica do contrato de capacidade
+  - 6. SMOKE REAL ponta a ponta OK (smoke_phase2.py, 1 iteração): executor `deepseek/deepseek-v4-flash-0731` → DeepInfra (283 tok, $0.0000361), crítico `openai/gpt-5.6-luna-pro` → OpenAI/flex (8690 tok, $0.002828, verdict=accept); status=success
+
+---
+
 ### [2026-09-01] Operação: artifact_registration (binding definitivo validado na API OpenRouter)
 
 - **Trigger**: decisão humana (round de binding) + comando "resolva pendências com testes reais" — validação contra `/api/v1/models` e `/endpoints`

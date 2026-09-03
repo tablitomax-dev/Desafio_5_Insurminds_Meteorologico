@@ -1,4 +1,4 @@
-# AI-DLC Tooling — Camada de Execução (fase 1, stub)
+# AI-DLC Tooling — Camada de Execução (fase 2, adapters reais)
 
 Pacote recriado e adaptado do rascunho externo (v0.6.x) aos padrões
 deste repositório. Governança: `AGENTS.md` → `.trae/project_rules.md`
@@ -10,26 +10,52 @@ criada — ver ADR-006 em `docs/decisions/`).
 Orquestrador Python **subordinado** ao Master Agent (ADR-001):
 roteamento por dificuldade (N1/N2/N3 = TINY/STANDARD/DEEP), loop de
 7 passos, gates e contrato de capacidade. Model-agnostic via env
-(ADR-004). Spec executável: [ai-dlc-spec.yaml](ai-dlc-spec.yaml).
+(ADR-004). Spec executável: [ai-dlc-spec.yaml](ai-dlc-spec.yaml)
+(v0.2.0 — carregada e validada por [spec_loader.py](spec_loader.py)).
 
-## Fase 1 (esta) — stub, sem rede e sem dependências novas
+## Fase 2 (esta) — executor e crítico reais + observabilidade
 
-- [contracts.py](contracts.py): contratos Pydantic (`TaskContext`,
-  `CapacityDecision`, `BlockerType`, `ModelProfile`, `ExecutorProposal`,
-  `CriticReview`, `IterationRecord`, `LoopResult`)
-- [ai_dlc_orchestrator.py](ai_dlc_orchestrator.py): `classify_task()`
-  determinístico + `run_loop()` + gates (N1/N2 autônomos, N3 dupla
-  confirmação) + stop rules (`success = tests_pass E
-  acceptance_criteria_met E critic=accept`)
-- `call_executor_llm()` / `call_independent_critic()`: **stubs tipados
-  determinísticos** (sem OpenRouter). A fase 2 troca o interior, não a
-  assinatura.
+- [ai_dlc_orchestrator.py](ai_dlc_orchestrator.py): `classify_task()`,
+  `run_loop()`, gates, stop rules + **fns reais**
+  (`call_executor_llm_real` / `call_independent_critic_real`) e
+  `real_functions()` para injeção. Os stubs determinísticos permanecem
+  como default do loop (determinismo dos testes); os reais são opt-in.
+- [openrouter_client.py](openrouter_client.py): transporte **urllib
+  stdlib** (sem SDK) — reasoning effort + `provider.only` (tags de
+  endpoint); key de `OPENROUTER_API_KEY` (env) ou registro Windows
+  HKCU (`setx`); **nunca impressa**. Key ausente →
+  `missing_credentials_decision()` (contrato de capacidade).
+- Parse JSON **tolerante** do executor/crítico (direto, bloco ```json
+  ou embutido em prosa). Erros de rede viram proposal/review anotada —
+  o loop nunca derruba; as stop rules decidem.
+- [spec_loader.py](spec_loader.py): PyYAML; `verify_spec_consistency()`
+  valida perfis/routing da spec contra o código (vazio = consistente).
+- [cost_report.py](cost_report.py): `generate_cost_report()` +
+  `report_markdown()` — tokens/custo por perfil a partir do `usage`.
+- Auditoria: `run_loop(audit_path="runs.jsonl")` → 1 linha JSON por run
+  (artefato local, não versionado).
+- [dashboard.py](dashboard.py): Flask — `/` (runs), `/runs/<n>`
+  (detalhe), `/cost-report`.
 
 ## Como rodar
 
 ```bash
-python -m pytest tools/ai-dlc/tests -v      # suíte TDD (39 testes)
-python tools/ai-dlc/ai_dlc_orchestrator.py  # demo do loop com stubs
+python -m pytest tools/ai-dlc/tests -q        # suíte TDD (112 testes)
+python tools/ai-dlc/ai_dlc_orchestrator.py    # demo do loop com stubs
+python tools/ai-dlc/smoke_binding.py          # binding real (4 perfis)
+python tools/ai-dlc/smoke_phase2.py           # loop real ponta a ponta (executor + crítico)
+python tools/ai-dlc/dashboard.py              # dashboard :5001
+```
+
+Loop real (executor + crítico via OpenRouter — requer key):
+
+```python
+from ai_dlc_orchestrator import TaskContext, run_loop, real_functions
+ctx = TaskContext(task_id="t1", objective="...", acceptance_criteria=["..."])
+fns = real_functions()                     # key lida de env/registro
+result = run_loop(ctx, executor_fn=fns["executor_fn"],
+                  critic_fn=fns["critic_fn"], audit_path="runs.jsonl")
+print(result.status, result.iterations)
 ```
 
 ## Binding de modelos (definitivo — validado na API do OpenRouter, 2026-09-01)
@@ -79,20 +105,17 @@ Confirma: alias `~` do fast (resolvido para v4-flash-0731), efforts
 low/high/max aceitos, tags de endpoint roteando dentro da whitelist e
 `openai/flex` funcional no crítico.
 
-## Backlog fase 2 (bolt próprio, com checkpoints de autorização)
+## Backlog fase 3 (com checkpoints de autorização)
 
-1. Executor real via OpenRouter (deps `pyyaml`/`openai` — instalar
-   somente com checkpoint humano).
-2. Loader PyYAML da spec + persistência real em
-   `memory-bank/maintenance-log.md` (hoje: `log_sink` em memória).
-3. Crítico independente real (perfil deep).
-4. `requirements-ai-dlc.txt` (criar/instalar com autorização).
-5. Dashboard Flask, `generate_cost_report`, integração Telegram
-   ("Grill Me").
-6. Avaliar adoção do `.aiignore` da referência (config de ferramenta).
+1. Integração Telegram ("Grill Me") — adiado por decisão do usuário
+   (2026-09-03).
+2. `requirements-ai-dlc.txt`: declarar deps (pyyaml/flask/openai já
+   instaladas no ambiente; manifest exige decisão humana).
+3. CI de Python (pytest na pipeline; hoje CI é bootstrap npm).
 
 ## Referência original
 
 O zip `artifacts.zip` fornecido pelo usuário (saída de gerador LLM
 externo, não fonte de verdade) foi extraído em `tools/ai-dlc/_reference/`
-e **deletado após a adaptação**, conforme combinado (limpeza total).
+e **deletado após a adaptação**, conforme combinado (limpeza total). O
+`.aiignore` da referência foi adotado na fase 2 (raiz do repo).

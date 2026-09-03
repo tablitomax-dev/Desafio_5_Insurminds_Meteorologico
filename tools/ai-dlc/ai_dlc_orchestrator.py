@@ -31,6 +31,7 @@ from contracts import (
     ModelProfile,
     TaskContext,
 )
+from openrouter_client import OpenRouterError, chat
 
 MODEL_PROFILES: dict[str, ModelProfile] = {
     # Valores validados na API pública do OpenRouter (2026-09-01):
@@ -132,7 +133,7 @@ def call_executor_llm(
         changed_files=[],
         tests_pass=iteration >= 2,
         acceptance_criteria_met=iteration >= 3,
-        notes=["stub: substituir no bolt da fase 2 (executor OpenRouter real)"],
+        notes=["stub: padrão determinístico dos testes; fns reais são injetadas"],
     )
 
 
@@ -146,8 +147,188 @@ def call_independent_critic(proposal: ExecutorProposal) -> CriticReview:
         stub=True,
         verdict=verdict,
         reason=reason,
-        risk_notes=["stub: crítico independente real entra na fase 2"],
+        risk_notes=["stub: crítico determinístico; fn real é call_independent_critic_real"],
     )
+
+
+# --------------------------------------------------------------------------
+# Adapters reais (fase 2) — OpenRouter via openrouter_client (urllib).
+# Erros de rede NUNCA derrubam o loop: viram proposal/review com o erro
+# anotado (o loop aplica as stop rules sobre eles).
+# --------------------------------------------------------------------------
+
+EXECUTOR_SYSTEM_PROMPT = (
+    "Você é o executor do loop AI-DLC (ADR-006). Responda SOMENTE com um "
+    "objeto JSON válido, sem texto fora do JSON, com as chaves: "
+    'summary (string), changed_files (array de strings), tests_pass (boolean), '
+    "acceptance_criteria_met (boolean), notes (array de strings)."
+)
+
+CRITIC_SYSTEM_PROMPT = (
+    "Você é o crítico independente do loop AI-DLC (ADR-006). Avalie a "
+    "proposta contra a stop rule: tests_pass E acceptance_criteria_met E "
+    "veredito accept. Responda SOMENTE com um objeto JSON válido, com as "
+    'chaves: verdict ("accept" | "repair" | "blocked"), reason (string), '
+    "risk_notes (array de strings)."
+)
+
+
+def _message_content(data: dict) -> str:
+    try:
+        return str(data["choices"][0]["message"]["content"] or "")
+    except (KeyError, IndexError, TypeError):
+        return ""
+
+
+def _extract_json(content: str) -> dict | None:
+    """Parse tolerante: JSON direto, bloco cercado ```json ou embutido em prosa."""
+    if not content:
+        return None
+    text = content.strip()
+    candidates: list[str] = []
+    if "```" in text:  # blocos cercados
+        for part in text.split("```"):
+            part = part.strip()
+            if part.lower().startswith("json"):
+                part = part[4:].strip()
+            if part:
+                candidates.append(part)
+    candidates.append(text)
+    lo, hi = text.find("{"), text.rfind("}")
+    if lo != -1 and hi > lo:
+        candidates.append(text[lo : hi + 1])
+    for candidate in candidates:
+        try:
+            obj = json.loads(candidate)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
+def call_executor_llm_real(
+    ctx: TaskContext,
+    iteration: int,
+    profile: ModelProfile,
+    *,
+    api_key: "str | None" = None,
+) -> ExecutorProposal:
+    """Executor real: propõe via OpenRouter; parse tolerante do JSON."""
+    prompt_user = (
+        f"Tarefa {ctx.task_id}: {ctx.objective}\n"
+        "Critérios de aceite:\n- " + "\n- ".join(ctx.acceptance_criteria)
+        + f"\n\nIteração {iteration}. Se os critérios ainda não estiverem "
+        "atendidos, marque tests_pass/acceptance_criteria_met como false e "
+        "liste em notes o que falta."
+    )
+    try:
+        data = chat(
+            profile,
+            [
+                {"role": "system", "content": EXECUTOR_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_user},
+            ],
+            api_key=api_key,
+        )
+    except OpenRouterError as exc:
+        return ExecutorProposal(
+            stub=False,
+            summary=f"[erro de transporte] iteração {iteration} de {ctx.task_id}",
+            tests_pass=False,
+            acceptance_criteria_met=False,
+            notes=[f"OpenRouterError: {exc}"],
+        )
+
+    usage, model, provider = data.get("usage"), data.get("model"), data.get("provider")
+    content = _message_content(data)
+    obj = _extract_json(content)
+    if obj is None:
+        return ExecutorProposal(
+            stub=False,
+            summary=f"[resposta não-JSON] iteração {iteration} de {ctx.task_id}",
+            tests_pass=False,
+            acceptance_criteria_met=False,
+            notes=["conteúdo sem JSON parseável", f"preview: {content[:200]}"],
+            model=model,
+            provider=provider,
+            usage=usage,
+        )
+    return ExecutorProposal(
+        stub=False,
+        summary=str(obj.get("summary", "")),
+        changed_files=[str(f) for f in obj.get("changed_files", []) if f],
+        tests_pass=bool(obj.get("tests_pass", False)),
+        acceptance_criteria_met=bool(obj.get("acceptance_criteria_met", False)),
+        notes=[str(n) for n in obj.get("notes", []) if n],
+        model=model,
+        provider=provider,
+        usage=usage,
+    )
+
+
+def call_independent_critic_real(
+    proposal: ExecutorProposal, *, api_key: "str | None" = None
+) -> CriticReview:
+    """Crítico real: CRITIC_PROFILE independente avalia a proposta."""
+    payload = json.dumps(proposal.model_dump(mode="json"), ensure_ascii=False, default=str)
+    prompt_user = (
+        f"Proposta do executor (JSON):\n{payload}\n\n"
+        "Avalie contra a stop rule e responda com o JSON do sistema."
+    )
+    try:
+        data = chat(
+            CRITIC_PROFILE,
+            [
+                {"role": "system", "content": CRITIC_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt_user},
+            ],
+            api_key=api_key,
+        )
+    except OpenRouterError as exc:
+        return CriticReview(
+            stub=False,
+            verdict="blocked",
+            reason=f"crítico indisponível: {exc}",
+        )
+
+    usage, model, provider = data.get("usage"), data.get("model"), data.get("provider")
+    content = _message_content(data)
+    obj = _extract_json(content)
+    verdict = str(obj.get("verdict", "")).lower() if obj else ""
+    if obj is None or verdict not in ("accept", "repair", "blocked"):
+        return CriticReview(
+            stub=False,
+            verdict="repair",
+            reason="resposta malformada do crítico (JSON/verdict ausente ou inválido)",
+            risk_notes=[f"preview: {content[:200]}"],
+            model=model,
+            provider=provider,
+            usage=usage,
+        )
+    return CriticReview(
+        stub=False,
+        verdict=verdict,  # type: ignore[arg-type] — validado no if acima
+        reason=str(obj.get("reason", "")),
+        risk_notes=[str(n) for n in obj.get("risk_notes", []) if n],
+        model=model,
+        provider=provider,
+        usage=usage,
+    )
+
+
+def real_functions(api_key: "str | None" = None) -> dict[str, Callable]:
+    """Fns reais com assinaturas do loop (injetar em run_loop).
+
+    run_loop(ctx, executor_fn=fns["executor_fn"], critic_fn=fns["critic_fn"]).
+    """
+    def executor_fn(ctx: TaskContext, iteration: int, profile: ModelProfile) -> ExecutorProposal:
+        return call_executor_llm_real(ctx, iteration, profile, api_key=api_key)
+
+    def critic_fn(proposal: ExecutorProposal) -> CriticReview:
+        return call_independent_critic_real(proposal, api_key=api_key)
+
+    return {"executor_fn": executor_fn, "critic_fn": critic_fn}
 
 
 # --------------------------------------------------------------------------
@@ -171,6 +352,7 @@ def run_loop(
     human_confirmed: bool = False,
     max_iterations: int | None = None,
     log_path: "str | Path | None" = None,
+    audit_path: "str | Path | None" = None,
 ) -> LoopResult:
     """Executa o loop plan→act→verify→critic até stop rule ou gate.
 
@@ -180,6 +362,8 @@ def run_loop(
     Gate N3: sem `human_confirmed`, retorna awaiting_dual_confirmation.
     Se `log_path` for informado, persiste auditoria via
     write_maintenance_entry() ao final do run.
+    Se `audit_path` for informado, persiste 1 linha JSON por run
+    (fonte do dashboard Flask — fase 2).
     """
     result = _run_loop_inner(
         ctx,
@@ -191,6 +375,9 @@ def run_loop(
         human_confirmed=human_confirmed,
         max_iterations=max_iterations,
     )
+    result.task_id = ctx.task_id
+    if audit_path is not None:
+        append_run_jsonl(audit_path, result)
     if log_path is not None:
         write_maintenance_entry(log_path, result)
     return result
@@ -323,8 +510,9 @@ def write_maintenance_entry(path: "str | Path", result: LoopResult) -> None:
     target = Path(path)
     header = (
         f"- **ai-dlc run: {result.status}** (task-level)\n"
-        f"  - iterations={result.iterations} level={result.level.name} "
-        f"profile={result.profile} blocker={result.blocker_type.value if result.blocker_type else 'none'}\n"
+        f"  - task={result.task_id or 'n/a'} iterations={result.iterations} "
+        f"level={result.level.name} profile={result.profile} "
+        f"blocker={result.blocker_type.value if result.blocker_type else 'none'}\n"
     )
     payload = json.dumps(
         [r.model_dump(mode="json") for r in result.records], ensure_ascii=False, indent=2
@@ -332,6 +520,18 @@ def write_maintenance_entry(path: "str | Path", result: LoopResult) -> None:
     block = f"{header}```json\n{payload}\n```\n"
     with target.open("a", encoding="utf-8") as fh:
         fh.write(block)
+
+
+def append_run_jsonl(path: "str | Path", result: LoopResult) -> None:
+    """Append de 1 linha JSON por run (fonte do dashboard — fase 2).
+
+    Formato JSONL: um LoopResult serializado por linha; linhas
+    corrompidas são ignoradas na leitura (load_runs do dashboard).
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(result.model_dump(mode="json"), ensure_ascii=False) + "\n")
 
 
 if __name__ == "__main__":
