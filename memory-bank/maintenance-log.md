@@ -44,6 +44,33 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-01] Operação: artifact_registration (binding definitivo validado na API OpenRouter)
+
+- **Trigger**: decisão humana (round de binding) + comando "resolva pendências com testes reais" — validação contra `/api/v1/models` e `/endpoints`
+- **Artefatos tocados (6)**: tools/ai-dlc/{contracts.py, ai_dlc_orchestrator.py, ai-dlc-spec.yaml, README.md, tests/test_binding.py, tests/test_persistence.py}, docs/decisions/006 (revisado)
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso (56 testes pytest)
+- **Detalhes**:
+  - 1. Binding definitivo gravado e VALIDADO: fast `~deepseek/deepseek-v4-flash-latest` (alias `~` obrigatório — sem til: 404), balanced/deep `z-ai/glm-5.3-flash` effort high/max (GLM só aceita max/high/low; `xhigh` rejeitado pela API), crítico `openai/gpt-5.6-luna-pro` effort max no endpoint `openai/flex`
+  - 2. Tags de endpoint confirmadas no campo `tag` da API (`z-ai/fp8`, `openai/flex`, `baidu/fp8`…) — whitelist via `provider.only`, fallback só entre endpoints
+  - 3. Persistência de auditoria real implementada (`write_maintenance_entry`, append por run, 6 testes)
+  - 4. SMOKE TEST REAL 4/4 OK (key via setx, smoke_binding.py): fast→DeepInfra (alias ~→v4-flash-0731), balanced→Novita, deep→Z.AI, crítico→OpenAI/flex; efforts low/high/max aceitos; tags de endpoint roteando na whitelist
+
+---
+
+### [2026-09-01] Operação: artifact_registration (AI-DLC tooling — fase 1 stub)
+
+- **Trigger**: decisão humana explícita (grilling Q1–Q13) — rascunho externo AI-DLC recriado como camada de execução subordinada; ADR-006
+- **Artefatos tocados (10)**: tools/ai-dlc/{README.md, ai-dlc-spec.yaml, contracts.py, ai_dlc_orchestrator.py, conftest.py, tests/test_contracts.py, tests/test_classify.py, tests/test_loop.py, tests/test_gates.py}, docs/decisions/006-orchestrator-secondary-execution-layer.md, docs/tasks/003-ai-dlc-orchestrator-tooling.md, standards/decision-index.md, standards/keyword-index.md, standards/_index.csv
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso (39 testes pytest)
+- **Detalhes**:
+  - 1. ADR-006 gravado (docs/decisions/ + decision-index): loops/gates/roteamento como código; esboço `agent-orchestration.yaml` permanece descartado
+  - 2. Níveis unificados com depth_levels (N1=TINY, N2=STANDARD, N3=DEEP); binding por env (ADR-004); `.trae/rules/` NÃO criada (project_rules.md única fonte)
+  - 3. Limpeza combinada: `artifacts.zip`, `tools/ai-dlc/_reference/` e `AI-DLC-QUICKSTART.md` da raiz deletados após adaptação (conteúdo reescrito em tools/ai-dlc/README.md)
+
+---
+
 ### [2026-08-29] Operação: policy_update (aprovação flexível — contexto acadêmico)
 
 - **Trigger**: decisão humana explícita — remover bloqueio de aprovação por outra pessoa; trabalho acadêmico exige fluxo mais flexível

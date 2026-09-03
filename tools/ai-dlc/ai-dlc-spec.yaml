@@ -1,0 +1,162 @@
+# ============================================================
+# AI-DLC Orchestrator Spec — v0.1.0 (adaptado Desafio 5)
+# Linhagem: rascunho externo v0.6.x (gerador LLM), recriado e
+# adaptado aos padrões deste repo (AGENTS.md, ADR-001/004,
+# context-budget.yaml). Fase 1: política executada em modo stub
+# por ai_dlc_orchestrator.py (sem rede). O loader PyYAML desta
+# spec entra no bolt da fase 2 (checkpoint de dependências).
+# ============================================================
+
+version: "0.1.0"
+name: "AI-DLC Orchestrator (Desafio 5)"
+status: draft-adapted
+adrs: [ADR-006]
+complements: [ADR-001, ADR-004]
+
+execution_mode: enforce   # LLM só propõe; o loop Python aplica e valida.
+
+# ------------------------------------------------------------
+# ROTEAMENTO POR DIFICULDADE
+# Unificado com depth_levels do memory-bank/standards/
+# context-budget.yaml — NÃO há esquema paralelo de níveis.
+# ------------------------------------------------------------
+routing:
+  classify_task: objective_signals   # implementado em ai_dlc_orchestrator.classify_task
+  level_mapping:
+    1: { depth: TINY, model_profile: code_fast, max_iterations: 3 }
+    2: { depth: STANDARD, model_profile: code_balanced, max_iterations: 5 }
+    3: { depth: DEEP, model_profile: code_deep, max_iterations: 7 }
+  objective_signals:
+    level_3:
+      - involves_architecture
+      - involves_security_or_data
+      - involves_migration
+      - has_schema_changes        # checkpoint de schema do project_rules → N3
+      - has_auth_or_secrets       # checkpoint de segredos do project_rules → N3
+      - risk=high
+    level_2:
+      - files_involved>=3
+      - has_concurrency_or_infra
+      - risk=medium
+    level_1: [default]
+
+# ------------------------------------------------------------
+# PERFIS DE MODELO — model-agnostic (ADR-004): binding via env override.
+# Binding definitivo decidido pelo usuário (2026-09-01) e VALIDADO na API
+# pública do OpenRouter (/api/v1/models + /endpoints):
+#   - modelo fast exige o alias "~" (sem til → 404);
+#   - GLM aceita apenas max/high/low (mandatory=true) → balanced = high;
+#   - tags de endpoint confirmadas (campo `tag`: z-ai/fp8, openai/flex).
+# Providers = whitelist via provider.only (tags); fallback só entre
+# endpoints da lista; sem fallback de modelo; sem max_price; sem seed;
+# sem top_k/top_p; data_collection não configurado.
+# ------------------------------------------------------------
+model_profiles:
+  code_fast:                      # N1/TINY — max 3 iterações
+    env_binding: OPENROUTER_MODEL_FAST
+    default_model: "~deepseek/deepseek-v4-flash-latest"
+    temperature: 0.2
+    thinking: false
+    reasoning_effort: low
+    max_tokens: 4096
+    endpoint_tags: [baidu/fp8, deepinfra/fp8, open-inference/fp8]
+    quantizations: [fp8]
+  code_balanced:                  # N2/STANDARD — max 5 iterações
+    env_binding: OPENROUTER_MODEL_BALANCED
+    default_model: "z-ai/glm-5.3-flash"
+    temperature: 0.3
+    thinking: true
+    reasoning_effort: high
+    max_tokens: 8192
+    endpoint_tags: [z-ai/fp8, novita/fp8, gmicloud/fp8]
+    quantizations: [fp8]
+  code_deep:                      # N3/DEEP — max 7 iterações
+    env_binding: OPENROUTER_MODEL_DEEP
+    default_model: "z-ai/glm-5.3-flash"
+    temperature: 0.5
+    thinking: true
+    reasoning_effort: max
+    max_tokens: 16384
+    endpoint_tags: [z-ai/fp8, novita/fp8, gmicloud/fp8]
+    quantizations: [fp8]
+  critic:                         # crítico independente (modelo separado)
+    env_binding: OPENROUTER_MODEL_CRITIC
+    default_model: "openai/gpt-5.6-luna-pro"
+    temperature: 0.2
+    thinking: true
+    reasoning_effort: max
+    max_tokens: 20000
+    endpoint_tags: [openai/flex]
+
+# ------------------------------------------------------------
+# LOOP DE EXECUÇÃO (7 passos) — alinhado ao ciclo do AGENTS.md
+# ------------------------------------------------------------
+loop:
+  steps: [plan, inspect_context, act_small, verify, self_assess, critic_review, continue_or_stop]
+  mapping_ai_dlc:
+    plan: "AGENTS.md etapa 2 (plano antes de editar)"
+    inspect_context: "etapa 1 + hierarquia de contexto"
+    act_small: "etapa 4 (mudança pequena e focada)"
+    verify: "etapa 5 (validações)"
+    self_assess: "etapa 7 (informar resultado)"
+    critic_review: "skill revisao-critica"
+    continue_or_stop: "etapa 8 (aguardar autorização)"
+
+# ------------------------------------------------------------
+# CONTRATO DE CAPACIDADE
+# ------------------------------------------------------------
+capacity_contract:
+  status: [ok, warning, blocked]
+  invariants:
+    - "blocked ⇒ blocker_type obrigatório e can_continue_autonomously=false"
+    - "ok ⇒ blocker_type nulo"
+    - "warning ⇒ required_human_input não vazio (pausa + opções)"
+  blocker_types: [missing_credentials, missing_product_decision, ambiguous_requirement, destructive_next_step, non_reproducible_error, stagnation]
+  persistence:
+    fase_1: "log_sink em memória (auditável por iteração)"
+    fase_2: "memory-bank/maintenance-log.md — registro por iteração"
+
+# ------------------------------------------------------------
+# GATES
+# ------------------------------------------------------------
+gates:
+  human_checkpoints: "1:1 com .trae/project_rules.md (única fonte de regras; .trae/rules/ intencionalmente NÃO criada)"
+  autonomy:
+    level_1: autonomous
+    level_2: autonomous
+    level_3: dual_confirmation   # dupla confirmação humana
+
+# ------------------------------------------------------------
+# ORQUESTRADOR SECUNDÁRIO (herdado da referência v0.6.x)
+# ------------------------------------------------------------
+secondary_orchestrator:
+  enabled: false   # fase 1: stubs; fase 2 (bolt próprio): adapters reais
+  stubs: [call_executor_llm, call_independent_critic]
+  triggers:
+    tool_failure_streak: 3
+    no_progress_iterations: 2
+    max_patches_per_task: 3
+
+# ------------------------------------------------------------
+# STOP RULES
+# ------------------------------------------------------------
+stop_rules:
+  success: "tests_pass AND acceptance_criteria_met AND critic_verdict=accept"
+  blocked:
+    - stagnation            # max_iterations esgotado (N1=3, N2=5, N3=7)
+    - missing_credentials
+    - missing_product_decision
+    - ambiguous_requirement
+    - destructive_next_step
+    - non_reproducible_error
+    - context_budget_hard_stop   # 🔴95% do context-budget.yaml
+
+# ------------------------------------------------------------
+# BACKLOG FASE 2 (bolt próprio, com checkpoints de autorização)
+# ------------------------------------------------------------
+phase_2_backlog:
+  - "executor real via OpenRouter (deps: pyyaml/openai — instalar com checkpoint)"
+  - "loader PyYAML desta spec + persistência real em maintenance-log.md"
+  - "mapear o critic profile no pipeline do run_loop (fase 2: crítico real)"
+  - "dashboard Flask, generate_cost_report, integração Telegram ('Grill Me')"
+  - "avaliar adoção do .aiignore da referência (config de ferramenta)"
