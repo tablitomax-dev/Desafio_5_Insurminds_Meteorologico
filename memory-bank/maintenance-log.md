@@ -71,6 +71,8 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+=======
+>>>>>>> origin/main
 ### [2026-08-29] Operação: policy_update (aprovação flexível — contexto acadêmico)
 
 - **Trigger**: decisão humana explícita — remover bloqueio de aprovação por outra pessoa; trabalho acadêmico exige fluxo mais flexível
