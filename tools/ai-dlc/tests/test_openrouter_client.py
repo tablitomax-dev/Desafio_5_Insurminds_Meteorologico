@@ -8,7 +8,6 @@ from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from contracts import BlockerType, CapacityDecision, ModelProfile
 from openrouter_client import (
     API_URL,

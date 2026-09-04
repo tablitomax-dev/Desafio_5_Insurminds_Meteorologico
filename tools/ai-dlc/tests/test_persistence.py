@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from contracts import TaskContext
 from ai_dlc_orchestrator import run_loop, write_maintenance_entry
+from contracts import TaskContext
 
 
 def _ctx() -> TaskContext:

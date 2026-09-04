@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
-import pytest
-
 from ai_dlc_orchestrator import (
     call_executor_llm_real,
     call_independent_critic_real,
