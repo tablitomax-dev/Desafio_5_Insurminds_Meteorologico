@@ -44,6 +44,20 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-2 collection-pipeline + ADR-005)
+
+- **Trigger**: autorização humana ("continuar o desenvolvimento com foco total"); branch stacked `feature/002-collection-pipeline` sobre o PR 002-1 (ainda aberto)
+- **Artefatos tocados (21)**: app/{domain/ports.py, adapters/{__init__,open_meteo,fixtures,catalog}.py, pipeline.py, cli.py, __main__.py}, data/{policy_holders,weather_fixtures}.json, tests/{test_pipeline,test_cli}.py, tests/adapters/{test_open_meteo,test_fixtures,test_catalog}.py, tests/fixtures/open_meteo/current_response.json, docs/decisions/005-open-meteo-source.md, bolts/002-collection-pipeline/{bolt.md, execution-log.md}, bolts/_index.csv, intents/_index.csv, intents/002-proactive-communication/{story-index.md, units/{weather-monitoring,policy-holders,pipeline-cli}.md}, maintenance-log
+- **Resultado**: ✅ sucesso — 84 passed; ruff limpo; mypy `app/` limpo; run real do orquestrador success (crítico accept, US$0.0029)
+- **Detalhes**:
+  1. Stories 01 e 07 → done (coleta Open-Meteo + relatório de rodada CLI); 5 de 7 stories do intent concluídas
+  2. ADR-005 registrado (Open-Meteo; urllib stdlib em vez de httpx — zero dependências)
+  3. Bug de codepage (cp1252) encontrado no smoke da CLI e corrigido (`errors="replace"` + prints ASCII-safe)
+  4. Demo offline versionada em `data/` — banca roda `python -m app run --offline` sem internet
+  5. PR chore independente `chore/004-ruff-auto-fixes` criado (auto-fixes de lint da fase 2)
+
+---
+
 ### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-1 domain-core + primeiro run real do orquestrador)
 
 - **Trigger**: autorização humana ("voltar ao intent 002 e prosseguir usando a nova estrutura de orquestração"); modo escolhido: run_loop completo por bolt, 3 PRs (domain-core → collection-pipeline → llm-optional)

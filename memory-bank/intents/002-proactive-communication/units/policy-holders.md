@@ -1,7 +1,7 @@
 # Unit — policy-holders
 
 > Intent: 002-proactive-communication | Stage: domain
-> Status: `in_progress` (PolicyHolder ✓ bolt 002-1; catalog in-memory + seeds JSON → bolt 002-2)
+> Status: `done` (bolt 002-2: PolicyHolderRepository in-memory + seeds JSON)
 
 ## Objetivo
 

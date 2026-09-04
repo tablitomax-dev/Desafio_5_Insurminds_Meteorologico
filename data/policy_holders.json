@@ -1,0 +1,74 @@
+[
+  {
+    "id": "H001",
+    "name": "Maria Silva",
+    "phone": "+5511987650001",
+    "latitude": -23.55,
+    "longitude": -46.63,
+    "insurance_types": ["residential"],
+    "is_coastal": false
+  },
+  {
+    "id": "H002",
+    "name": "João Souza",
+    "phone": "+5511987650002",
+    "latitude": -23.53,
+    "longitude": -46.64,
+    "insurance_types": ["auto"],
+    "is_coastal": false
+  },
+  {
+    "id": "H003",
+    "name": "Ana Costa",
+    "phone": "+5513987650003",
+    "latitude": -23.96,
+    "longitude": -46.33,
+    "insurance_types": ["residential", "auto"],
+    "is_coastal": true
+  },
+  {
+    "id": "H004",
+    "name": "Pedro Lima",
+    "phone": "+5519987650004",
+    "latitude": -22.90,
+    "longitude": -47.06,
+    "insurance_types": ["residential"],
+    "is_coastal": false
+  },
+  {
+    "id": "H005",
+    "name": "Carla Dias",
+    "phone": "+5515987650005",
+    "latitude": -23.50,
+    "longitude": -47.45,
+    "insurance_types": ["residential"],
+    "is_coastal": false
+  },
+  {
+    "id": "H006",
+    "name": "Fernando Alves",
+    "phone": "+5513987650006",
+    "latitude": -24.12,
+    "longitude": -46.26,
+    "insurance_types": ["auto"],
+    "is_coastal": true
+  },
+  {
+    "id": "H007",
+    "name": "Juliana Rocha",
+    "phone": "+5541987650007",
+    "latitude": -25.42,
+    "longitude": -49.27,
+    "insurance_types": ["residential"],
+    "is_coastal": false
+  },
+  {
+    "id": "H008",
+    "name": "Marcos Pires",
+    "phone": "+5512987650008",
+    "latitude": -23.18,
+    "longitude": -45.88,
+    "insurance_types": ["auto"],
+    "is_coastal": false
+  }
+]
