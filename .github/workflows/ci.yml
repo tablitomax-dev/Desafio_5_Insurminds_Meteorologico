@@ -1,11 +1,16 @@
-# CI bootstrap — gate mínimo de qualidade de infraestrutura.
+# CI — gate obrigatório de qualidade (intent 001-repository-quality-foundation).
 #
-# HONESTIDADE DE GATE (ver critérios de aceite do intent
-# 001-repository-quality-foundation): ainda NÃO existem scripts de
-# lint/test/build no package.json. O que este workflow prova hoje é que
-# o repositório instala de forma reproduzível (npm ci determinístico).
-# Quando scripts reais existirem (stack Python: pytest/ruff/mypy ou
-# npm scripts), remover o `--if-present` e torná-los mandatórios aqui.
+# Substitui o bootstrap Node (--if-present) por checks Python MANDATÓRIOS,
+# conforme a nota de honestidade de gate do workflow anterior:
+#   Lint:       ruff check .   (gate canônico do repo: E4,E7,E9,F,I,B — ruff.toml)
+#   Type-check: mypy app       (contrato de tipos do produto)
+#   Unit tests: pytest         (pytest.ini: testpaths = tests, suíte offline)
+#
+# Dependências fixadas em requirements-dev.txt (reprodutibilidade).
+# Runtime do produto é stdlib-only: não há dependências de execução.
+#
+# Design do step de pré-merge associado (Fase 1 read_only_assess):
+#   tools/ai-dlc/spec_pre_merge_quality_repair.md
 
 name: CI
 
@@ -27,21 +32,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v5
         with:
-          node-version: 20
-          cache: npm
+          python-version: "3.13"
+          cache: pip
 
-      - name: Install dependencies (reproduzível)
-        run: npm ci
+      - name: Install dev dependencies (reproduzível)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
 
-      # Bootstrap: não-mandatórios até existirem (ver comentário acima).
-      - name: Lint
-        run: npm run lint --if-present
+      - name: Lint (ruff)
+        run: ruff check .
 
-      - name: Test
-        run: npm test --if-present
+      - name: Type-check (mypy app/)
+        run: mypy app
 
-      - name: Build
-        run: npm run build --if-present
+      - name: Unit tests (pytest)
+        run: pytest

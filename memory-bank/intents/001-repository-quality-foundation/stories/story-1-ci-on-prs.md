@@ -1,7 +1,7 @@
 # Story — story-1-ci-on-prs
 
 > Intent: 001-repository-quality-foundation | Unit: ci-and-merge-governance
-> Status: `done` (implementação na branch, gate ativa com merge) | Prioridade: P0
+> Status: `done` (CI Python obrigatória: ruff+mypy+pytest; gate ativo após merge do PR) | Prioridade: P0
 
 ## História
 
@@ -19,6 +19,11 @@ automática, para não depender apenas de revisão manual.
 
 ## Notas
 
-`npm ci` valida instalação reproduzível; lint/test/build são
-`--if-present` no bootstrap (não há scripts ainda — honestidade de gate
-documentada no workflow).
+Upgrade bolt 001-pre-merge-quality-repair (2026-09-04): o bootstrap Node
+`--if-present` foi removido e os gates Python agora são mandatários —
+Lint: `ruff check .` (gate canônico `E4,E7,E9,F,I,B` do `ruff.toml`);
+Type-check: `mypy app`; Unit tests: `pytest` — com `requirements-dev.txt`
+pinnado. O check `CI / quality` roda em todo PR e push para `main`.
+Step local read-only `tools/ai-dlc/pre_merge_check.py` (Fase 1 da spec
+`spec_pre_merge_quality_repair.md`) valida os mesmos gates na working tree
+antes de abrir o PR.
