@@ -1,7 +1,7 @@
 # Unit — pipeline-cli
 
 > Intent: 002-proactive-communication | Stage: interface (orquestração)
-> Status: `planned`
+> Status: `done` (bolt 002-2: run_round + format_report + CLI --offline)
 
 ## Objetivo
 

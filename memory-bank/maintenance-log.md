@@ -44,6 +44,20 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-2 collection-pipeline + ADR-005)
+
+- **Trigger**: autorização humana ("continuar o desenvolvimento com foco total"); branch stacked `feature/002-collection-pipeline` sobre o PR 002-1 (ainda aberto)
+- **Artefatos tocados (21)**: app/{domain/ports.py, adapters/{__init__,open_meteo,fixtures,catalog}.py, pipeline.py, cli.py, __main__.py}, data/{policy_holders,weather_fixtures}.json, tests/{test_pipeline,test_cli}.py, tests/adapters/{test_open_meteo,test_fixtures,test_catalog}.py, tests/fixtures/open_meteo/current_response.json, docs/decisions/005-open-meteo-source.md, bolts/002-collection-pipeline/{bolt.md, execution-log.md}, bolts/_index.csv, intents/_index.csv, intents/002-proactive-communication/{story-index.md, units/{weather-monitoring,policy-holders,pipeline-cli}.md}, maintenance-log
+- **Resultado**: ✅ sucesso — 84 passed; ruff limpo; mypy `app/` limpo; run real do orquestrador success (crítico accept, US$0.0029)
+- **Detalhes**:
+1. Stories 01 e 07 → done (coleta Open-Meteo + relatório de rodada CLI); 5 de 7 stories do intent concluídas
+2. ADR-005 registrado (Open-Meteo; urllib stdlib em vez de httpx — zero dependências)
+3. Bug de codepage (cp1252) encontrado no smoke da CLI e corrigido (`errors="replace"` + prints ASCII-safe)
+4. Demo offline versionada em `data/` — banca roda `python -m app run --offline` sem internet
+5. PR chore independente `chore/004-ruff-auto-fixes` criado (auto-fixes de lint da fase 2)
+
+---
+
 ### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-1 domain-core + primeiro run real do orquestrador)
 
 - **Trigger**: autorização humana ("voltar ao intent 002 e prosseguir usando a nova estrutura de orquestração"); modo escolhido: run_loop completo por bolt, 3 PRs (domain-core → collection-pipeline → llm-optional)
@@ -51,12 +65,11 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 - **Economia de contexto estimada**: n/a
 - **Resultado**: ✅ sucesso (177 testes pytest = 65 produto + 112 ai-dlc)
 - **Detalhes**:
-  - 1. Núcleo de domínio 100% TDD (vermelho→verde): VOs WMO (`WeatherSnapshot`/`WeatherCondition`/`classify_weathercode`), `PolicyHolder`+`InsuranceType`, motor de regras (`HeavyRainRule`/`HailRule`/`StrongWindRule` + `RiskEngine` com dedup por (holder, kind)), `TemplateGenerator` (≤480 chars, ≥2 recomendações), `SimulatedSender` — sem I/O, sem dependências novas
-  - 2. Primeiro run REAL do orquestrador (fase 2) em bolt de produto via novo `tools/ai-dlc/run_bolt.py`: executor recebe estado objetivo real (pytest + git status), `verify` injetado roda a suíte de verdade, crítico independente gateia; run auditado em `runs.jsonl`
-  - 3. Run `bolt-002-1-domain-core`: success em 1 iteração (N2 → `code_balanced`); executor `z-ai/glm-5.3-flash` (GMICloud, 1245 tok, US$0.000228); crítico `openai/gpt-5.6-luna-pro` (openai/flex, 13167 tok, US$0.004797, verdict=accept) ≈ US$0.005 o bolt
-  - 4. Modo de operação validado: iteração a iteração (`--max-iterations 1`, correção entre runs) — o loop não pausa entre iterações; stories 02–05 `done` no story-index; units atualizadas
-  - 5. ruff/mypy disponibilizados (autorização humana) em `.venv` local — sandbox bloqueia pip global/user; `ruff.toml` versionado (E4/E7/E9/F/I/B): ruff all checks passed no repo inteiro (B017 → `FrozenInstanceError` nos testes de imutabilidade; 15 auto-fixes de imports), mypy `app/` 0 erros, `tools/ai-dlc` 25 apontamentos herdados da fase 1/2 — dívida de CI Python (fase 3)
-
+1. Núcleo de domínio 100% TDD (vermelho→verde): VOs WMO, `PolicyHolder`, `InsuranceType`, motor de regras, `TemplateGenerator` e `SimulatedSender`
+2. Primeiro run real do orquestrador, auditado em `runs.jsonl`
+3. Run `bolt-002-1-domain-core`: sucesso em uma iteração, com aprovação do crítico independente
+4. Stories 02–05 marcadas como `done` no `story-index`
+5. `ruff` aprovado no repositório e `mypy app/` sem erros
 ---
 
 ### [2026-09-03] Operação: artifact_registration (AI-DLC tooling — fase 2: adapters reais + observabilidade)
