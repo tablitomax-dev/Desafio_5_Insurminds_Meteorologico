@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+from ai_dlc_orchestrator import run_loop
 from contracts import (
     BlockerType,
     CapacityDecision,
     CriticReview,
     ExecutorProposal,
-    RiskLevel,
     TaskContext,
 )
-from ai_dlc_orchestrator import run_loop
 
 
 def _ctx(**kwargs) -> TaskContext:

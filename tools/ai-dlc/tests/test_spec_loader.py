@@ -11,7 +11,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 from ai_dlc_orchestrator import CRITIC_PROFILE, MODEL_PROFILES, PROFILE_BY_LEVEL
 from contracts import DifficultyLevel
 from spec_loader import check_consistency, load_spec, verify_spec_consistency

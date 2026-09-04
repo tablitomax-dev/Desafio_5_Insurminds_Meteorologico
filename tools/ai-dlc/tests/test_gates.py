@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from contracts import RiskLevel, TaskContext
 from ai_dlc_orchestrator import run_loop
+from contracts import RiskLevel, TaskContext
 
 
 def _n3_ctx() -> TaskContext:

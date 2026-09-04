@@ -9,7 +9,6 @@ Fatos verificados contra /api/v1/models e /endpoints:
 from __future__ import annotations
 
 import pytest as pytest_monkeypatch
-
 from ai_dlc_orchestrator import CRITIC_PROFILE, MODEL_PROFILES, profile_for
 from contracts import DifficultyLevel
 

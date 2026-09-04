@@ -15,10 +15,9 @@ import json
 import sys
 from pathlib import Path
 
-from flask import Flask, abort, render_template_string
-
 from contracts import LoopResult
 from cost_report import generate_cost_report, report_markdown
+from flask import Flask, abort, render_template_string
 
 DEFAULT_AUDIT_PATH = Path(__file__).resolve().parent / "runs.jsonl"
 DEFAULT_PORT = 5001

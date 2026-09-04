@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 
-from ai_dlc_orchestrator import TaskContext, run_loop, real_functions
+from ai_dlc_orchestrator import TaskContext, real_functions, run_loop
 from openrouter_client import missing_credentials_decision, read_api_key
 
 

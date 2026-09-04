@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from contracts import (
     BlockerType,
     CapacityDecision,
@@ -13,6 +11,7 @@ from contracts import (
     ModelProfile,
     TaskContext,
 )
+from pydantic import ValidationError
 
 
 def _ctx(**kwargs) -> TaskContext:
