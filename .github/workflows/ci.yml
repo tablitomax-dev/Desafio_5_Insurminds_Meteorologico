@@ -37,6 +37,10 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+          # Cache de pip exige manifest: nosso repo usa requirements-dev.txt
+          # (runtime stdlib-only). Sem isso, a action falha por falta de
+          # requirements.txt/pyproject.toml.
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dev dependencies (reproduzível)
         run: |
