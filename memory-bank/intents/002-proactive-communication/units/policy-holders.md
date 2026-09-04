@@ -1,7 +1,7 @@
 # Unit — policy-holders
 
 > Intent: 002-proactive-communication | Stage: domain
-> Status: `planned`
+> Status: `done` (bolt 002-2: PolicyHolderRepository in-memory + seeds JSON)
 
 ## Objetivo
 

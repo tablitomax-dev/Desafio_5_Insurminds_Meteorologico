@@ -1,3 +1,3 @@
 slug,name,status,created_at,last_touched_at,unit_count,story_count,active_bolt,owner,priority,read_when_keywords
 001-repository-quality-foundation,Repository Quality Foundation,active,2026-08-25,2026-08-25,1,2,001-bootstrap-ci-and-merge-governance,pablo,P0,"governanca,ci,squash merge,contratos agentes,main protegida"
-002-proactive-communication,Proactive Communication,active,2026-08-29,2026-08-29,6,7,,pablo,P0,"open-meteo,alerta proativo,segurados,eventos climaticos,risk rules,llm,i2a2"
+002-proactive-communication,Proactive Communication,active,2026-08-29,2026-09-03,6,7,002-collection-pipeline,pablo,P0,"open-meteo,alerta proativo,segurados,eventos climaticos,risk rules,llm,i2a2"

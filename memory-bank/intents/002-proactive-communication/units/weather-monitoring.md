@@ -1,7 +1,7 @@
 # Unit — weather-monitoring
 
 > Intent: 002-proactive-communication | Stage: infrastructure/domain edge
-> Status: `planned`
+> Status: `done` (bolt 002-2: port WeatherProvider + OpenMeteoProvider + fixtures offline)
 
 ## Objetivo
 
