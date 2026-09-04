@@ -44,6 +44,21 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-04] Operação: artifact_registration (intent 001 — bolt 001-pre-merge-quality-repair: governança de CI/merge + step pré-merge Fase 1)
+
+- **Trigger**: pedido humano ("analisar lacunas e problemas, fazer plano de correção e aplicar melhorias") após análise da spec `spec_pre_merge_quality_repair.md` e verificação do estado real dos PRs via API do GitHub
+- **Artefatos tocados (16)**: .github/workflows/ci.yml, requirements-dev.txt, .gitignore, tools/ai-dlc/pre_merge_check.py, tools/ai-dlc/tests/test_pre_merge_check.py, tools/ai-dlc/spec_pre_merge_quality_repair.md (movida de tests/ e com seção de implementação), app/domain/notify.py (PR fix separado), memory-bank/bolts/001-pre-merge-quality-repair/{bolt.md, execution-log.md}, bolts/_index.csv, intents/_index.csv, intents/001-repository-quality-foundation/{story-index.md, stories/story-1-ci-on-prs.md}, maintenance-log
+- **Resultado**: ✅ sucesso — ruff limpo; mypy app/ limpo (15 files); pytest 84 passed; suíte ai-dlc 122 passed; smoke real do step: `approved_for_merge` com artefatos por run_id
+- **Detalhes**:
+1. CI Python mandatária (Lint: `ruff check .`; Type-check: `mypy app`; Unit tests: `pytest`) substitui o bootstrap Node `--if-present` — nota de honestidade de gate encerrada; `requirements-dev.txt` pinnado (ruff 0.16.5, mypy 2.3.1, pytest 9.1.1)
+2. Step Fase 1 (`read_only_assess`) do `pre_merge_quality_repair` com state machine mínima, classificação de falhas (categoria/severidade) e decisão auditável `approved_for_merge|blocked` (exit 0/1)
+3. TDD real vermelho→verde: 10 testes do step antes do código; bug cp1252 em `main` corrigido via PR independente (`fix/002-cp1252-console`, d41a950)
+4. Orquestrador (ADR-006): run 1 `blocked` — crítico real vetou por "existência ≠ conteúdo"; run 2 `success` com crítico `accept` após correção humana das evidências (US$0.0139 nos 2 runs)
+5. story-2 squash-only → done na prática (PRs #6/#7/#8 squash mergeados e branches deletadas); branch protection formal pendente do admin
+6. Observação do sandbox: runs de comando oscilaram entre exit 1 completo e exit 0 com stdout vazio (comando engolido) — fonte da verdade usada foi o `runs.jsonl`
+
+---
+
 ### [2026-09-03] Operação: artifact_registration (intent 002 — bolt 002-2 collection-pipeline + ADR-005)
 
 - **Trigger**: autorização humana ("continuar o desenvolvimento com foco total"); branch stacked `feature/002-collection-pipeline` sobre o PR 002-1 (ainda aberto)

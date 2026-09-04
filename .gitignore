@@ -8,6 +8,8 @@ __pycache__/
 
 # Auditoria local do orquestrador AI-DLC (fase 2 — artefato gerado)
 tools/ai-dlc/runs.jsonl
+# Runs do step pre_merge_quality_repair (artefatos locais por run_id)
+tools/ai-dlc/runs/pre-merge-quality-repair/
 
 # Logs
 *.log
