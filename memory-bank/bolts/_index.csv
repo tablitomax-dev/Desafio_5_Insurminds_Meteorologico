@@ -1,6 +1,6 @@
 slug,name,status,unit_slug,intent_slug,created_at,started_at,completed_at,last_touched_at,ddd_stage,story_count,has_compact_summary,priority
 001-bootstrap-ci-and-merge-governance,Bootstrap CI And Merge Governance,active,ci-and-merge-governance,001-repository-quality-foundation,2026-08-25,2026-08-25,,2026-08-25,implementation,2,partial,P0
-002-domain-core,Domain Core,active,risk-detection,002-proactive-communication,2026-09-03,2026-09-03,,2026-09-03,implementation,4,partial,P0
-002-collection-pipeline,Collection Pipeline,active,weather-monitoring,002-proactive-communication,2026-09-03,2026-09-03,,2026-09-03,implementation,2,partial,P0
+002-domain-core,Domain Core,done,risk-detection,002-proactive-communication,2026-09-03,2026-09-03,2026-09-03,2026-09-04,implementation,4,partial,P0
+002-collection-pipeline,Collection Pipeline,done,weather-monitoring,002-proactive-communication,2026-09-03,2026-09-03,2026-09-03,2026-09-04,implementation,2,partial,P0
 001-pre-merge-quality-repair,Pre Merge Quality Repair,active,ci-and-merge-governance,001-repository-quality-foundation,2026-09-04,2026-09-04,,2026-09-04,implementation,1,partial,P0
-002-llm-optional,Llm Optional,active,message-generation,002-proactive-communication,2026-09-04,2026-09-04,,2026-09-04,implementation,1,partial,P1
+002-llm-optional,Llm Optional,done,message-generation,002-proactive-communication,2026-09-04,2026-09-04,2026-09-04,2026-09-04,implementation,1,partial,P1

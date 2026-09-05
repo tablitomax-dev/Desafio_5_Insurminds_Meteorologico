@@ -1,8 +1,7 @@
 # Bolt — 002-llm-optional
 
 > Intent: 002-proactive-communication | Unit: message-generation (story 06)
-> Status: `active` (implementação concluída; aguardando revisão → commit → PR)
-> Prioridade: P1 | Data: 2026-09-04
+> Status: `done` (squash merge no PR #11 → main, commit d4aaac4) | Data: 2026-09-04
 
 ## Objetivo
 

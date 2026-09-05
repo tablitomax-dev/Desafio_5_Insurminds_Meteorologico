@@ -13,10 +13,12 @@
 
 ## Status Atual
 
-Intent ativo: `001-repository-quality-foundation` (1 unit, 2 stories,
-bolt `001-bootstrap-ci-and-merge-governance` em execução na branch
-`chore/ci-and-merge-governance`). Ver
-[intents/001-repository-quality-foundation/story-index.md](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/intents/001-repository-quality-foundation/story-index.md)
+**Intent 002-proactive-communication: `done`** (7/7 stories; PRs #6/#7/#11
+squash mergeados em `main`, CI verde). Ver
+[intents/002-proactive-communication/story-index.md](file:///c:/Users/pbena/Documents/Cursos/Insurminds/Desafio_5_Insurminds_Meteorologico/memory-bank/intents/002-proactive-communication/story-index.md)
+
+Intent 001-repository-quality-foundation segue `active` apenas por dívidas
+de governança opcional (branch protection formal na UI, compactação de bolts).
 
 ## Próximo Passo
 

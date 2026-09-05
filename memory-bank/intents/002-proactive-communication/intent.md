@@ -1,6 +1,8 @@
 # Intent 002 — proactive-communication
 
-> Status: `active` | Owner: pablo | Priority: P0 | Criado: 2026-08-29
+> Status: `done` (2026-09-04 — 7/7 stories implementadas via TDD e mergeadas
+> em `main` por squash: PRs #6, #7, #11; CI mandatário verde) | Owner: pablo |
+> Priority: P0 | Criado: 2026-08-29
 >
 > Contexto: trabalho acadêmico I2A2 — Desafio 5 "Ferramenta Inteligente
 > para Comunicação Proativa com o Segurado". Primeiro intent de PRODUTO
@@ -45,9 +47,16 @@ de envio. Sem envio real de SMS/e-mail/push.
 
 ## Critérios de aceite do intent
 
-1. `python -m app run` executa o fluxo completo ponta a ponta (mock/offline-free via Open-Meteo real)
-2. Segurados de seeds recebem apenas alertas condizentes com perfil/região
-3. Regras de risco 100% cobertas por testes unitários (TDD, núcleo sem I/O)
-4. Mensagens: template determinístico sempre funciona; LLM opcional melhora, sem quebrar demo se não houver key
-5. ADR-005 documenta a fonte com alternativas e trade-offs
-6. Relatório final em console demonstra etapas 1–5 do enunciado
+1. [x] `python -m app run` executa o fluxo completo ponta a ponta (mock/offline-free via Open-Meteo real)
+2. [x] Segurados de seeds recebem apenas alertas condizentes com perfil/região
+3. [x] Regras de risco 100% cobertas por testes unitários (TDD, núcleo sem I/O)
+4. [x] Mensagens: template determinístico sempre funciona; LLM opcional melhora, sem quebrar demo se não houver key
+5. [x] ADR-005 documenta a fonte com alternativas e trade-offs
+6. [x] Relatório final em console demonstra etapas 1–5 do enunciado
+
+## Fechamento (2026-09-04)
+
+MVP concluído: 7/7 stories `done` (PRs #6, #7 e #11), README de apresentação
+na raiz, demo offline determinística para a banca e modo LLM com fallback
+garantido (`openrouter:z-ai/glm-5.3-flash`). Dívidas não-bloqueantes da
+fundação ficam no intent 001; evoluções futuras exigem novo intent.
