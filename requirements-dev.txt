@@ -1,0 +1,10 @@
+# Manifest de desenvolvimento — gate obrigatório de CI
+# (intent 001-repository-quality-foundation, bolt 001-pre-merge-quality-repair).
+#
+# Runtime do produto (app/) é stdlib-only: não há dependências de execução.
+# Versões pinadas idênticas ao ambiente local de desenvolvimento (.venv)
+# para garantir que CI e máquina do dev executem o MESMO gate.
+
+ruff==0.16.5
+mypy==2.3.1
+pytest==9.1.1

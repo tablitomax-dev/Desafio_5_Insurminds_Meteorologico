@@ -40,10 +40,12 @@ roteamento por dificuldade (N1/N2/N3 = TINY/STANDARD/DEEP), loop de
 ## Como rodar
 
 ```bash
-python -m pytest tools/ai-dlc/tests -q        # suíte TDD (112 testes)
+python -m pytest tools/ai-dlc/tests -q        # suíte TDD (122 testes)
 python tools/ai-dlc/ai_dlc_orchestrator.py    # demo do loop com stubs
 python tools/ai-dlc/smoke_binding.py          # binding real (4 perfis)
 python tools/ai-dlc/smoke_phase2.py           # loop real ponta a ponta (executor + crítico)
+python tools/ai-dlc/run_bolt.py --task-id b --objective "..." --criteria "..." --risk medium --tests-cmd "..."  # run de bolt com estado real
+python tools/ai-dlc/pre_merge_check.py --base origin/main  # step pre_merge_quality_repair — Fase 1 (read_only_assess, spec: spec_pre_merge_quality_repair.md)
 python tools/ai-dlc/dashboard.py              # dashboard :5001
 ```
 
