@@ -16,8 +16,8 @@ from app.adapters.catalog import (
     load_policy_holders,
 )
 from app.adapters.fixtures import FixtureWeatherProvider
+from app.adapters.llm_messages import build_generator, describe_mode
 from app.adapters.open_meteo import OpenMeteoProvider
-from app.domain.messages import TemplateGenerator
 from app.domain.notify import SimulatedSender
 from app.domain.ports import WeatherProvider
 from app.domain.risk import RiskEngine
@@ -61,14 +61,18 @@ def _run(args: argparse.Namespace) -> int:
     else:
         provider = OpenMeteoProvider()
 
+    # Composition root: env LLM_MODEL/LLM_PROVIDER decide story 06
+    # (LLM opcional com fallback silencioso; default template).
+    generator = build_generator()
+
     report = run_round(
         repository=repository,
         provider=provider,
         engine=RiskEngine(),
-        generator=TemplateGenerator(),
+        generator=generator,
         sender=SimulatedSender(),
     )
-    print(format_report(report, generator_name="template"))
+    print(format_report(report, generator_name=describe_mode(generator)))
     return 0
 
 
