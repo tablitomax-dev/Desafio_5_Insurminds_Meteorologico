@@ -44,6 +44,20 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-04] Operação: artifact_registration (intent 002 — bolt 002-3 LlmGenerator com fallback garantido; story-06)
+
+- **Trigger**: autorização humana ("vamos continuar o desenvolvimento do desafio"); decisões aprovadas via AskUserQuestion: contrato `LLM_MODEL`+`LLM_PROVIDER`, pin pydantic-ai no `requirements-dev.txt`, branch autorizada, binding = o mesmo executor do ai-dlc (`z-ai/glm-5.3-flash`)
+- **Artefatos tocados (10)**: app/adapters/llm_messages.py (novo), app/domain/messages.py (mapas → públicos), app/cli.py, tests/adapters/test_llm_messages.py (novo, 16 testes), tests/test_cli.py (+3), requirements-dev.txt (+pydantic-ai==1.107.1), bolts/002-llm-optional/{bolt.md, execution-log.md}, bolts/_index.csv, intents/_index.csv, intents/002/{story-index.md, units/message-generation.md}, maintenance-log
+- **Resultado**: ✅ sucesso — TDD vermelho→verde; pytest 103 passed (produto) + ai-dlc 122 passed; ruff limpo; mypy `app/` limpo (16 files); smoke real: `python -m app run --offline` com `LLM_MODEL=openrouter:z-ai/glm-5.3-flash` → **5/5 mensagens reescritas pelo LLM, relatório `(modo llm)`**; default sem env → `(modo template)`
+- **Detalhes**:
+1. `LlmGenerator` (Pydantic AI, model-agnostic) com fallback silencioso → `TemplateGenerator` (demo à prova de chave ausente — critério de aceite #4 do intent); import LAZY: modo template nunca exige o SDK
+2. Descoberta em smoke: rajadas de chamadas LLM sofrem rate limit (429) → retry curto com backoff no adapter (3 tentativas, 1s/2s); caso híbrido (fallback + LLM) coberto por fake `fail_first`
+3. Falso negativo de smoke causado por driver com env reduzida (quebra httpx/SSL do processo filho) — com env herdada, produto OK; sandbox engoliu comandos conforme padrão já registrado (fonte de verdade = arquivo capturado)
+4. Binding do modelo: `openrouter:z-ai/glm-5.3-flash` (mesmo executor do ai-dlc, decisão do dono); key via `OPENROUTER_API_KEY`
+5. story-06 → done; unit message-generation → done — **7/7 stories do intent 002 concluídas** (MVP ponta a ponta)
+
+---
+
 ### [2026-09-04] Operação: artifact_registration (intent 001 — bolt 001-pre-merge-quality-repair: governança de CI/merge + step pré-merge Fase 1)
 
 - **Trigger**: pedido humano ("analisar lacunas e problemas, fazer plano de correção e aplicar melhorias") após análise da spec `spec_pre_merge_quality_repair.md` e verificação do estado real dos PRs via API do GitHub

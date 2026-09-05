@@ -1,7 +1,7 @@
 # Unit — message-generation
 
 > Intent: 002-proactive-communication | Stage: application
-> Status: `in_progress` (TemplateGenerator ✓ bolt 002-1; LlmGenerator → bolt 002-3)
+> Status: `done` (TemplateGenerator ✓ bolt 002-1; LlmGenerator ✓ bolt 002-3)
 
 ## Objetivo
 
@@ -13,7 +13,12 @@ personalizada por nome, perfil de seguro, evento e recomendações preventivas.
 ## Fatia técnica
 
 - Port `MessageGenerator.generate(holder, alert) -> GeneratedMessage`
-- `TemplateGenerator`: Jinja2/native f-string por (tipo de alerta × tipo de seguro)
-- `LlmGenerator`: Pydantic AI agent; prompt com regras de tom (claro,
-  empático, acionável, ≤ 480 chars); fallback → template se erro/sem key
-- Seleção no composition root (CLI): env var decide; default template
+- `TemplateGenerator`: f-strings nativas por (tipo de alerta × tipo de seguro)
+- `LlmGenerator`: Pydantic AI agent (`app/adapters/llm_messages.py`); prompt
+  com regras de tom (claro, empático, acionável, ≤ 480 chars) + as MESMAS
+  recomendações do template; retry curto (429/5xx); fallback silencioso →
+  template; modo exercitado reportado no relatório (`mode` llm | template |
+  híbrido)
+- Seleção no composition root (CLI): `LLM_MODEL` (id pydantic-ai, ex.:
+  `openrouter:z-ai/glm-5.3-flash`) ativa; `LLM_PROVIDER=template` força
+  template; default = template

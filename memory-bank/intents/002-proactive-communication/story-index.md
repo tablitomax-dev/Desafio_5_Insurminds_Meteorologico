@@ -9,7 +9,7 @@
 | `story-03-hail-auto` | Granizo → automóvel | risk-detection | done | P0 |
 | `story-04-wind-coastal` | Vento forte → região costeira | risk-detection | done | P1 |
 | `story-05-template-message` | Mensagem por template paramétrico | message-generation | done | P0 |
-| `story-06-llm-optional` | LLM opcional melhora a mensagem | message-generation | planned | P1 |
+| `story-06-llm-optional` | LLM opcional melhora a mensagem | message-generation | done | P1 |
 | `story-07-simulated-send-report` | Envio simulado + relatório da rodada | notification-sim + pipeline-cli | done | P0 |
 
 Ordem de construção sugerida (TDD, núcleo primeiro):

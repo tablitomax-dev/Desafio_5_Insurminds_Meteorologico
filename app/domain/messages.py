@@ -1,9 +1,9 @@
-"""Geração de mensagens — unit message-generation (story 05).
+"""Geração de mensagens — unit message-generation (stories 05 e 06).
 
 Port `MessageGenerator` com a implementação determinística
 `TemplateGenerator` (f-strings nativas, sem dependências). A
-implementação LLM opcional (story 06) entra em bolt posterior e
-faz fallback para este template.
+implementação LLM opcional (story 06) vive em `app.adapters.llm_messages`
+e faz fallback silencioso para este template.
 """
 
 from __future__ import annotations
@@ -17,14 +17,16 @@ from app.domain.risk import RiskAlert, RiskKind
 # Story 05: mensagem ≤ 480 chars.
 MAX_MESSAGE_CHARS: int = 480
 
-_EVENT_BY_KIND: dict[RiskKind, str] = {
+EVENT_BY_KIND: dict[RiskKind, str] = {
     RiskKind.HEAVY_RAIN: "chuva intensa prevista para a sua região",
     RiskKind.HAIL: "granizo previsto para a sua região",
     RiskKind.STRONG_WIND: "ventos fortes previstos para a sua região",
 }
 
 # ≥ 2 recomendações preventivas específicas por tipo de evento (story 05).
-_RECOMMENDATIONS_BY_KIND: dict[RiskKind, tuple[str, ...]] = {
+# Públicos: o adaptador LLM (story 06) reusa as mesmas recomendações no
+# prompt para manter consistência entre template e reescrita do LLM.
+RECOMMENDATIONS_BY_KIND: dict[RiskKind, tuple[str, ...]] = {
     RiskKind.HEAVY_RAIN: (
         "Verifique a drenagem e as calhas da residência.",
         "Retire veículos de garagens alagáveis e áreas baixas.",
@@ -66,8 +68,8 @@ class TemplateGenerator:
     def generate(
         self, holder: PolicyHolder, alert: RiskAlert
     ) -> GeneratedMessage:
-        event = _EVENT_BY_KIND[alert.kind]
-        recommendations = _RECOMMENDATIONS_BY_KIND[alert.kind]
+        event = EVENT_BY_KIND[alert.kind]
+        recommendations = RECOMMENDATIONS_BY_KIND[alert.kind]
         parts = [f"Olá, {holder.name}! {event}."]
         parts.extend(f"• {rec}" for rec in recommendations)
         text = " ".join(parts)
