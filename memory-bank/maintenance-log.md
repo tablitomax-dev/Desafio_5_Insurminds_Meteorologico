@@ -44,6 +44,18 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-04] Operação: artifact_registration (intent 002 — fechamento do desafio + README da banca)
+
+- **Trigger**: pedido humano ("falta algo ou terminamos todo o desafio?"); decisões aprovadas: README na raiz, sync+cleanup de branches, fechar intent 002
+- **Artefatos tocados (9)**: README.md (novo, apresentação/demo/arquitetura para a banca), intents/002/intent.md (status done + critérios ✔ + Fechamento), intents/_index.csv (002 done), bolts/_index.csv (002-domain-core, 002-collection-pipeline, 002-llm-optional → done + completed_at), bolts/002-{domain-core,collection-pipeline,llm-optional}/bolt.md (header → done com nº do PR), story-index.md (raiz, Status Atual), maintenance-log
+- **Resultado**: ✅ sucesso — 7/7 stories do intent 002 mergeadas (PRs #6, #7, #11); PR #11 = d4aaac4; cleanup de 6 branches locais mergeadas; README novo na raiz
+- **Detalhes**:
+1. PR #11 mergeado pelo humano via squash (CI `CI / quality` verde; branch remota deletada) — intent 002 fechado com todos os critérios de aceite atendidos
+2. README raiz orienta a banca: demo offline determinística (`python -m app run --offline`), online (Open-Meteo) e modo LLM (`LLM_MODEL=openrouter:z-ai/glm-5.3-flash` + fallback garantido)
+3. Pendências remanescentes (não-bloqueantes, intent 001): branch protection formal, compactação dos bolts mergeados, Fase 2 do step pre-merge; 3 branches antigas (`chore/004-ai-dlc-phase2-real-executor`, `docs/002-proactive-communication`, `feature/002-proactive-communication`) aguardando aval para cleanup
+
+---
+
 ### [2026-09-04] Operação: artifact_registration (intent 002 — bolt 002-3 LlmGenerator com fallback garantido; story-06)
 
 - **Trigger**: autorização humana ("vamos continuar o desenvolvimento do desafio"); decisões aprovadas via AskUserQuestion: contrato `LLM_MODEL`+`LLM_PROVIDER`, pin pydantic-ai no `requirements-dev.txt`, branch autorizada, binding = o mesmo executor do ai-dlc (`z-ai/glm-5.3-flash`)

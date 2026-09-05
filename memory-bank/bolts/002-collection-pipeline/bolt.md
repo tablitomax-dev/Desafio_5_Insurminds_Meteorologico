@@ -4,6 +4,7 @@
 > Unit: weather-monitoring + policy-holders + pipeline-cli
 > Stories: 01 (coleta Open-Meteo), 07 (envio simulado + relatório da rodada)
 > Branch: `feature/002-collection-pipeline` (stacked sobre `feature/002-domain-core`)
+> Status: `done` (squash merge no PR #7 → main)
 
 ## Objetivo
 
