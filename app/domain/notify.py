@@ -50,6 +50,6 @@ class SimulatedSender:
             sent_at=datetime.now(UTC),
             status="simulated",
         )
-        print(f"[SIMULADO] {self.channel} → {holder.phone}: {message.text}")
+        print(f"[SIMULADO] {self.channel} -> {holder.phone}: {message.text}")
         self.records.append(record)
         return record
