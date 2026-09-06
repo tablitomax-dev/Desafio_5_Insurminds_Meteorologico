@@ -3,7 +3,8 @@
 Orquestra as etapas do enunciado: coleta por segurado → detecção de
 risco → mensagem → envio simulado. Sem I/O próprio: recebe ports
 prontas (composition root é a CLI). Falha de coleta registra e
-continua com os demais (story 01).
+continua com os demais (story 01). O relatório carrega também o
+snapshot de clima de cada segurado consultado (UI da banca, intent 003).
 """
 
 from __future__ import annotations
@@ -38,6 +39,9 @@ class RoundReport:
     alerts: tuple[RiskAlert, ...]
     messages: tuple[GeneratedMessage, ...]
     sends: tuple  # tuple[NotificationRecord, ...]
+    # intent 003 (UI da banca): tempo efetivo de cada segurado consultado
+    # (fixture no offline, Open-Meteo no online) — ordem da rodada.
+    snapshots: tuple[tuple[str, WeatherSnapshot], ...] = ()
 
 
 def run_round(
@@ -52,6 +56,7 @@ def run_round(
     messages: list[GeneratedMessage] = []
     sends: list = []
     failures: list[CollectionFailure] = []
+    snapshots: list[tuple[str, WeatherSnapshot]] = []
     consulted = 0
 
     for holder in repository.list_all():
@@ -63,6 +68,7 @@ def run_round(
             )
             continue
         consulted += 1
+        snapshots.append((holder.id, snapshot))
         for alert in engine.evaluate(snapshot, holder):
             alerts.append(alert)
             message = generator.generate(holder, alert)
@@ -75,6 +81,7 @@ def run_round(
         alerts=tuple(alerts),
         messages=tuple(messages),
         sends=tuple(sends),
+        snapshots=tuple(snapshots),
     )
 
 

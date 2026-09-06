@@ -105,6 +105,45 @@ def test_is_coastal_default_false_e_tipos_opcionais(tmp_path):
     assert holder.is_coastal is False
 
 
+def test_city_carregada_do_json_e_default_vazio(tmp_path):
+    """Given seeds com/sem `city` (intent 003: UI da banca), when load,
+    then city parseada; seed sem city mantém compatibilidade (\" \")."""
+    path = tmp_path / "policy_holders.json"
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "H001",
+                    "name": "Maria Silva",
+                    "phone": "+5511999990001",
+                    "latitude": -23.55,
+                    "longitude": -46.63,
+                    "insurance_types": ["residential"],
+                    "is_coastal": False,
+                    "city": "São Paulo/SP",
+                    "cep": "01016-020",
+                },
+                {
+                    "id": "H002",
+                    "name": "Sem Cidade",
+                    "phone": "+5511999990002",
+                    "latitude": -20.0,
+                    "longitude": -45.0,
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    holders = load_policy_holders(path)
+
+    maria, sem_cidade = holders
+    assert maria.city == "São Paulo/SP"
+    assert sem_cidade.city == ""
+    assert maria.cep == "01016-020"
+    assert sem_cidade.cep == ""
+
+
 def test_seeds_versionados_sao_validos_para_a_demo():
     """Given data/policy_holders.json versionado (demo da banca), when
     load, then 5–10 segurados, ids únicos e mix litoral/auto presentes."""

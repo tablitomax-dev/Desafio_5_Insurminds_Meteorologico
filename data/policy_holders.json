@@ -3,72 +3,88 @@
     "id": "H001",
     "name": "Maria Silva",
     "phone": "+5511987650001",
-    "latitude": -23.55,
-    "longitude": -46.63,
+    "latitude": -23.5505,
+    "longitude": -46.6333,
     "insurance_types": ["residential"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Glicério, São Paulo/SP",
+    "cep": "01016-020"
   },
   {
     "id": "H002",
     "name": "João Souza",
     "phone": "+5511987650002",
-    "latitude": -23.53,
-    "longitude": -46.64,
+    "latitude": -23.5310,
+    "longitude": -46.6410,
     "insurance_types": ["auto"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Luz, São Paulo/SP",
+    "cep": "01122-021"
   },
   {
     "id": "H003",
     "name": "Ana Costa",
     "phone": "+5513987650003",
-    "latitude": -23.96,
-    "longitude": -46.33,
+    "latitude": -23.9600,
+    "longitude": -46.3300,
     "insurance_types": ["residential", "auto"],
-    "is_coastal": true
+    "is_coastal": true,
+    "city": "Gonzaga, Santos/SP (litoral)",
+    "cep": "11065-500"
   },
   {
     "id": "H004",
     "name": "Pedro Lima",
     "phone": "+5519987650004",
-    "latitude": -22.90,
-    "longitude": -47.06,
+    "latitude": -22.9000,
+    "longitude": -47.0600,
     "insurance_types": ["residential"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Centro, Campinas/SP",
+    "cep": "13010-201"
   },
   {
     "id": "H005",
     "name": "Carla Dias",
     "phone": "+5515987650005",
-    "latitude": -23.50,
-    "longitude": -47.45,
+    "latitude": -23.5000,
+    "longitude": -47.4500,
     "insurance_types": ["residential"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Vila Senger, Sorocaba/SP",
+    "cep": "18013-000"
   },
   {
     "id": "H006",
     "name": "Fernando Alves",
     "phone": "+5513987650006",
-    "latitude": -24.12,
-    "longitude": -46.26,
+    "latitude": -24.1830,
+    "longitude": -46.7940,
     "insurance_types": ["auto"],
-    "is_coastal": true
+    "is_coastal": true,
+    "city": "Centro, Itanhaém/SP (litoral)",
+    "cep": "11740-000"
   },
   {
     "id": "H007",
     "name": "Juliana Rocha",
     "phone": "+5541987650007",
-    "latitude": -25.42,
-    "longitude": -49.27,
+    "latitude": -25.4200,
+    "longitude": -49.2700,
     "insurance_types": ["residential"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Centro Cívico, Curitiba/PR",
+    "cep": "80030-030"
   },
   {
     "id": "H008",
     "name": "Marcos Pires",
     "phone": "+5512987650008",
-    "latitude": -23.18,
-    "longitude": -45.88,
+    "latitude": -23.1800,
+    "longitude": -45.8800,
     "insurance_types": ["auto"],
-    "is_coastal": false
+    "is_coastal": false,
+    "city": "Jardim Bela Vista, São José dos Campos/SP",
+    "cep": "12210-060"
   }
 ]

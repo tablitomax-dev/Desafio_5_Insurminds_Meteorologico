@@ -25,6 +25,7 @@ class PolicyHolder:
 
     `is_coastal` marca região costeira — sinal usado pela StrongWindRule
     (story 04). Seeds preenchem o mix residencial/auto/litoral/rural.
+    `city` é rótulo de apresentação (UI da banca, intent 003).
     """
 
     id: str
@@ -33,6 +34,8 @@ class PolicyHolder:
     location: GeoLocation
     insurance_types: frozenset[InsuranceType] = frozenset()
     is_coastal: bool = False
+    city: str = ""
+    cep: str = ""  # geocoding via BrasilAPI (intent 003)
 
     def has_insurance(self, kind: InsuranceType) -> bool:
         return kind in self.insurance_types

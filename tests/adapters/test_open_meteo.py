@@ -42,7 +42,8 @@ def test_parse_da_resposta_gravada():
 
 def test_url_montada_com_parametros_da_api():
     """Given segurado com GeoLocation, when coleta, then URL contém
-    lat/lon, campos `current` e unidades kmh/mm."""
+    lat/lon com 4 casas decimais (recomendação Open-Meteo), campos
+    `current` e unidades kmh/mm."""
     captured: dict[str, str] = {}
 
     def fake_fetch(url: str, timeout: float) -> bytes:
@@ -52,11 +53,25 @@ def test_url_montada_com_parametros_da_api():
     OpenMeteoProvider(fetch=fake_fetch).current(LOCATION)
 
     url = captured["url"]
-    assert "latitude=-23.55" in url
-    assert "longitude=-46.63" in url
+    assert "latitude=-23.5500" in url
+    assert "longitude=-46.6300" in url
     assert "current=weather_code" in url
     assert "wind_speed_unit=kmh" in url
     assert "precipitation_unit=mm" in url
+
+
+def test_url_arredonda_coordenadas_para_4_casas():
+    """Given lat/lon com mais casas decimais, when coleta, then URL usa
+    coordenadas arredondadas a 4 casas (intent 003 — pedido do dono)."""
+    captured: dict[str, str] = {}
+    precise = GeoLocation(latitude=-23.5505231, longitude=-46.63098765)
+
+    OpenMeteoProvider(
+        fetch=lambda url, timeout: captured.update(url=url) or FIXTURE.read_bytes()
+    ).current(precise)
+
+    assert "latitude=-23.5505" in captured["url"]
+    assert "longitude=-46.6310" in captured["url"]
 
 
 def test_falha_de_rede_vira_erro_de_dominio():

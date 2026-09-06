@@ -1,8 +1,10 @@
 """CLI do intent 002 — story 07 (`python -m app run [--offline]`).
 
-Composition root manual (KISS, sem container): monta ports→adapters,
-executa a rodada e imprime o relatório. `--offline` usa fixtures
-gravadas (banca sem internet vê a mesma demo).
+Composition root em `app.composition` (compartilhado com a demo visual
+da intent 003): monta ports→adapters, executa a rodada e imprime o
+relatório. `--offline` usa fixtures gravadas (banca sem internet vê a
+mesma demo). O modo de mensagem segue o env (`LLM_MODEL`/`LLM_PROVIDER`,
+story 06) — na UI Streamlit a escolha é feita por botões.
 """
 
 from __future__ import annotations
@@ -11,17 +13,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from app.adapters.catalog import (
-    InMemoryPolicyHolderRepository,
-    load_policy_holders,
-)
-from app.adapters.fixtures import FixtureWeatherProvider
-from app.adapters.llm_messages import build_generator, describe_mode
-from app.adapters.open_meteo import OpenMeteoProvider
-from app.domain.notify import SimulatedSender
-from app.domain.ports import WeatherProvider
-from app.domain.risk import RiskEngine
-from app.pipeline import format_report, run_round
+from app.composition import run_proactive_round
+from app.pipeline import format_report
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -49,30 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _run(args: argparse.Namespace) -> int:
-    data_dir: Path = args.data
-    repository = InMemoryPolicyHolderRepository(
-        load_policy_holders(data_dir / "policy_holders.json")
-    )
-    provider: WeatherProvider
-    if args.offline:
-        provider = FixtureWeatherProvider(
-            path=data_dir / "weather_fixtures.json"
-        )
-    else:
-        provider = OpenMeteoProvider()
-
-    # Composition root: env LLM_MODEL/LLM_PROVIDER decide story 06
-    # (LLM opcional com fallback silencioso; default template).
-    generator = build_generator()
-
-    report = run_round(
-        repository=repository,
-        provider=provider,
-        engine=RiskEngine(),
-        generator=generator,
-        sender=SimulatedSender(),
-    )
-    print(format_report(report, generator_name=describe_mode(generator)))
+    report, mode = run_proactive_round(offline=args.offline, data_dir=args.data)
+    print(format_report(report, generator_name=mode))
     return 0
 
 
