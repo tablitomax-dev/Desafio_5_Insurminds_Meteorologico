@@ -228,3 +228,100 @@ def test_build_generator_provider_explicito(monkeypatch):
     default = build_generator(provider="llm")
     assert isinstance(default, LlmGenerator)
     assert default.model == DEFAULT_MODEL
+
+
+# --- intent 004: canal de envio (simulado / Telegram real) ---
+
+
+def test_build_sender_escolhe_o_canal(monkeypatch):
+    """Given delivery simulated/telegram, when build_sender, then
+    SimulatedSender ou TelegramSender; telegram_token explícito vence o
+    env TELEGRAM_BOT_TOKEN (mesmo contrato do gerador LLM)."""
+    from app.adapters.telegram_api import TelegramSender
+    from app.composition import (
+        DELIVERY_SIMULATED,
+        DELIVERY_TELEGRAM,
+        build_sender,
+    )
+    from app.domain.notify import SimulatedSender
+
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    assert isinstance(build_sender(), SimulatedSender)
+    assert isinstance(
+        build_sender(delivery=DELIVERY_SIMULATED), SimulatedSender
+    )
+    assert isinstance(
+        build_sender(delivery=DELIVERY_TELEGRAM, telegram_token="tok"),
+        TelegramSender,
+    )
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-token")
+    sender = build_sender(delivery=DELIVERY_TELEGRAM)
+    assert isinstance(sender, TelegramSender)
+    assert sender.token == "env-token"
+
+
+def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
+    """Given delivery telegram + chat_id vinculado (bancada/seeds), when
+    rodada, then NotificationRecord 'sent' com POST na Bot API por
+    chat_id — a falha de rede é a única diferença para o simulated."""
+    from app.adapters import telegram_api
+    from app.composition import DELIVERY_TELEGRAM, run_proactive_round
+    from app.domain.holders import InsuranceType, PolicyHolder
+    from app.domain.weather import GeoLocation
+
+    _limpar_env(monkeypatch)
+    data = _write_data_dir(tmp_path)
+    captured: dict = {}
+
+    def fake_post(url: str, payload: dict, timeout_s: float) -> bytes:
+        captured["url"] = url
+        captured["payload"] = payload
+        return json.dumps({"ok": True, "result": {"message_id": 1}}).encode()
+
+    monkeypatch.setattr(telegram_api, "_http_post_json", fake_post)
+
+    holder = PolicyHolder(
+        id="H001",
+        name="Maria Silva",
+        phone="+5511999990001",
+        location=GeoLocation(latitude=-23.55, longitude=-46.63),
+        insurance_types=frozenset({InsuranceType.AUTO}),
+        telegram_chat_id="123456789",
+    )
+
+    report, _mode = run_proactive_round(
+        offline=True,
+        data_dir=data,
+        holders=[holder],
+        delivery=DELIVERY_TELEGRAM,
+        telegram_token="T0K3N",
+    )
+
+    assert report.sends[0].status == "sent"
+    assert report.sends[0].channel == "telegram"
+    assert captured["payload"]["chat_id"] == 123456789
+
+
+def test_rodada_telegram_sem_chat_id_e_skipped(tmp_path, monkeypatch):
+    """Given delivery telegram e segurado sem chat_id, when rodada, then
+    'skipped' SEM rede — degradação graciosa, a rodada segue."""
+    from app.adapters import telegram_api
+    from app.composition import DELIVERY_TELEGRAM, run_proactive_round
+
+    _limpar_env(monkeypatch)
+    data = _write_data_dir(tmp_path)
+
+    def nao_chamar(url: str, payload: dict, timeout_s: float) -> bytes:
+        raise AssertionError("sem chat_id não deveria chamar a API")
+
+    monkeypatch.setattr(telegram_api, "_http_post_json", nao_chamar)
+
+    report, _mode = run_proactive_round(
+        offline=True,
+        data_dir=data,
+        delivery=DELIVERY_TELEGRAM,
+        telegram_token="T0K3N",
+    )
+
+    assert report.sends[0].status == "skipped"
+    assert "chat_id" in report.sends[0].detail

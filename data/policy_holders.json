@@ -8,7 +8,8 @@
     "insurance_types": ["residential"],
     "is_coastal": false,
     "city": "Glicério, São Paulo/SP",
-    "cep": "01016-020"
+    "cep": "01016-020",
+    "telegram_chat_id": ""
   },
   {
     "id": "H002",
@@ -19,7 +20,8 @@
     "insurance_types": ["auto"],
     "is_coastal": false,
     "city": "Luz, São Paulo/SP",
-    "cep": "01122-021"
+    "cep": "01122-021",
+    "telegram_chat_id": ""
   },
   {
     "id": "H003",
@@ -30,7 +32,8 @@
     "insurance_types": ["residential", "auto"],
     "is_coastal": true,
     "city": "Gonzaga, Santos/SP (litoral)",
-    "cep": "11065-500"
+    "cep": "11065-500",
+    "telegram_chat_id": ""
   },
   {
     "id": "H004",
@@ -41,7 +44,8 @@
     "insurance_types": ["residential"],
     "is_coastal": false,
     "city": "Centro, Campinas/SP",
-    "cep": "13010-201"
+    "cep": "13010-201",
+    "telegram_chat_id": ""
   },
   {
     "id": "H005",
@@ -52,7 +56,8 @@
     "insurance_types": ["residential"],
     "is_coastal": false,
     "city": "Vila Senger, Sorocaba/SP",
-    "cep": "18013-000"
+    "cep": "18013-000",
+    "telegram_chat_id": ""
   },
   {
     "id": "H006",
@@ -63,7 +68,8 @@
     "insurance_types": ["auto"],
     "is_coastal": true,
     "city": "Centro, Itanhaém/SP (litoral)",
-    "cep": "11740-000"
+    "cep": "11740-000",
+    "telegram_chat_id": ""
   },
   {
     "id": "H007",
@@ -74,7 +80,8 @@
     "insurance_types": ["residential"],
     "is_coastal": false,
     "city": "Centro Cívico, Curitiba/PR",
-    "cep": "80030-030"
+    "cep": "80030-030",
+    "telegram_chat_id": ""
   },
   {
     "id": "H008",
@@ -85,6 +92,7 @@
     "insurance_types": ["auto"],
     "is_coastal": false,
     "city": "Jardim Bela Vista, São José dos Campos/SP",
-    "cep": "12210-060"
+    "cep": "12210-060",
+    "telegram_chat_id": ""
   }
 ]

@@ -16,13 +16,19 @@ from app.domain.messages import GeneratedMessage
 
 @dataclass(frozen=True)
 class NotificationRecord:
-    """Registro de um despacho (consultável no relatório da rodada)."""
+    """Registro de um despacho (consultável no relatório da rodada).
+
+    `status`: "simulated" (SMS fake), "sent", "failed" ou "skipped"
+    (intent 004). `detail` carrega o motivo de failed/skipped para a
+    UI/relatório — degradação graciosa, sem exceção.
+    """
 
     holder_id: str
     channel: str
     message: str
     sent_at: datetime
     status: str
+    detail: str = ""
 
 
 class NotificationSender(Protocol):

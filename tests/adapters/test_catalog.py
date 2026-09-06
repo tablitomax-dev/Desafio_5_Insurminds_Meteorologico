@@ -122,6 +122,7 @@ def test_city_carregada_do_json_e_default_vazio(tmp_path):
                     "is_coastal": False,
                     "city": "São Paulo/SP",
                     "cep": "01016-020",
+                    "telegram_chat_id": "4242",
                 },
                 {
                     "id": "H002",
@@ -142,6 +143,8 @@ def test_city_carregada_do_json_e_default_vazio(tmp_path):
     assert sem_cidade.city == ""
     assert maria.cep == "01016-020"
     assert sem_cidade.cep == ""
+    assert maria.telegram_chat_id == "4242"
+    assert sem_cidade.telegram_chat_id == ""
 
 
 def test_seeds_versionados_sao_validos_para_a_demo():

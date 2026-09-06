@@ -113,10 +113,22 @@ def format_report(report: RoundReport, *, generator_name: str = "template") -> s
         )
 
     lines.append(f"4. Mensagens geradas: {len(report.messages)} (modo {generator_name})")
-    lines.append(f"5. Envios simulados: {len(report.sends)}")
-    for send in report.sends:
-        lines.append(
-            f"   [SIMULADO] {send.channel} -> segurado {send.holder_id} "
-            f"({send.status})"
-        )
+    if all(getattr(send, "channel", "sms") == "sms" for send in report.sends):
+        # Canal SMS fake (story 07/CLI): texto original preservado.
+        lines.append(f"5. Envios simulados: {len(report.sends)}")
+        for send in report.sends:
+            lines.append(
+                f"   [SIMULADO] {send.channel} -> segurado {send.holder_id} "
+                f"({send.status})"
+            )
+    else:
+        # Canal real (intent 004): reflete o canal/status de cada despacho.
+        lines.append(f"5. Envios despachados: {len(report.sends)}")
+        for send in report.sends:
+            detail = getattr(send, "detail", "")
+            extra = f" — {detail}" if detail else ""
+            lines.append(
+                f"   [{send.channel}] -> segurado {send.holder_id} "
+                f"({send.status}){extra}"
+            )
     return "\n".join(lines)
