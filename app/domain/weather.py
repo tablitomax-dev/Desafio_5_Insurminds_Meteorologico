@@ -85,7 +85,10 @@ class WeatherSnapshot:
     """Estado meteorológico pontual de uma GeoLocation.
 
     Campos espelham a API `current_weather` do Open-Meteo:
-    weathercode (WMO), precipitação (mm/h), vento (km/h), temperatura (°C).
+    weathercode (WMO), precipitação (mm/h), vento (km/h), temperatura (°C)
+    e umidade relativa (%). `humidity_pct` é `None` quando a fonte não
+    fornece umidade (degradação graciosa — regras que dependem dela, como
+    a FogRule, pulam a avaliação).
     """
 
     location: GeoLocation
@@ -93,6 +96,7 @@ class WeatherSnapshot:
     precipitation_mm_h: float
     wind_kmh: float
     temperature_c: float
+    humidity_pct: float | None = None  # intent 005 (neblina)
 
     @property
     def condition(self) -> WeatherCondition:

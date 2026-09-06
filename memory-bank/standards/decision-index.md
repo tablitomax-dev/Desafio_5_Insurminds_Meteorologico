@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-09-01T00:00:00Z
-total_decisions: 6
+last_updated: 2026-09-06T00:00:00Z
+total_decisions: 9
 ---
 
 # Decision Index
@@ -108,3 +108,13 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
 - **Path**: `docs/decisions/008-telegram-bot-api-delivery.md` | `app/adapters/telegram_api.py` | `app/domain/notify.py` (`NotificationRecord.detail`) | `app/composition.py` (`build_sender`)
 - **Summary**: Envio real via **TelegramSender** implementando a port `NotificationSender` existente — domínio/pipeline intactos. Restrição da plataforma: entrega por `chat_id` (NUNCA por telefone) e só para conversas iniciadas; **linking** telefone → chat_id via fluxo `/start` + contato compartilhado (`getUpdates`), casando o `phone_number` com o telefone da bancada. Token em `TELEGRAM_BOT_TOKEN` (env, contrato igual ao gerador LLM) + campo secreto na UI (não persiste). Degradação graciosa: `sent`/`failed`/`skipped` com motivo em `NotificationRecord.detail` — falha NUNCA quebra a rodada; texto da story 07 preservado para o canal SMS/CLI.
 - **Read when**: Ao implementar/alterar o envio (canais, linking, token, status de entrega), ou ao avaliar adicionar outro canal real (SMS/WhatsApp).
+
+---
+
+### ADR-009: Motor de risco V2 — limiares em tiers, regras compostas e consolidação de riscos simultâneos (intent 005)
+- **Status**: accepted
+- **Date**: 2026-09-06
+- **Bolt**: N/A (intent 005-risk-engine-v2, aprovada pelo dono)
+- **Path**: `docs/decisions/009-risk-engine-v2.md` | `app/domain/risk.py` | `app/domain/weather.py` (`WeatherSnapshot.humidity_pct`) | `app/adapters/open_meteo.py` (`relative_humidity_2m`) | `app/domain/messages.py` | `analise/` (material de referência)
+- **Summary**: Motor de risco V2 ADAPTADO do material `analise/risk_v2` (não copiado): regras consomem o domínio existente (`WeatherSnapshot` com weathercode WMO, `PolicyHolder` com enum `InsuranceType`/`is_coastal`); stories 02–04 preservadas como tier base e tiers superiores adicionados (chuva ≥20 HIGH / ≥35 VERY_HIGH; vento ≥80 VERY_HIGH). Novas regras ESCOPADAS POR RAMO com exposição material (classificação pessoal/residencial/auto aprovada pelo dono — só AUTO/RESIDENTIAL permanecem): calor (≥35 HIGH / ≥38 HEAT_WAVE VERY_HIGH) e frio (≤10 HIGH / ≤5 VERY_HIGH) → RESIDENTIAL ou AUTO; neblina (umidade ≥95 + vento ≤15 + chuva ≤10 — PULA sem umidade) → AUTO; tempestade (chuva+vento) → RESIDENTIAL ou AUTO; ressaca (litoral+vento≥80+chuva≥30) → RESIDENTIAL; vento forte segue a story 04 (geográfico). Umidade entra no snapshot (`humidity_pct: float | None`, Open-Meteo `relative_humidity_2m`, null → None). ≥2 riscos simultâneos → alertas individuais + resumo `MULTIPLE_RISKS` adicional (severidade máxima). Fallback por perfil estatístico FICA FORA do engine default (falso positivo em clima benigno) — material permanece em `analise/`.
+- **Read when**: Ao implementar/alterar regras de risco, limiares, severidades, escopo por ramo de seguro, consolidação de alertas, ou o campo de umidade do snapshot.

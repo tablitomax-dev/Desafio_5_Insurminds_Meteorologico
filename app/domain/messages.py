@@ -21,6 +21,17 @@ EVENT_BY_KIND: dict[RiskKind, str] = {
     RiskKind.HEAVY_RAIN: "chuva intensa prevista para a sua região",
     RiskKind.HAIL: "granizo previsto para a sua região",
     RiskKind.STRONG_WIND: "ventos fortes previstos para a sua região",
+    # V2 (intent 005) — todo kind exige entrada (o teste de 480 chars
+    # itera RiskKind inteiro).
+    RiskKind.HEAT: "calor intenso previsto para a sua região",
+    RiskKind.HEAT_WAVE: "onda de calor prevista para a sua região",
+    RiskKind.EXTREME_COLD: "frio intenso previsto para a sua região",
+    RiskKind.FOG: "neblina prevista para a sua região",
+    RiskKind.STORM: "tempestade prevista para a sua região",
+    RiskKind.ROUGH_SEA: "condições de ressaca previstas no litoral da sua região",
+    RiskKind.MULTIPLE_RISKS: (
+        "múltiplos riscos meteorológicos simultâneos na sua região"
+    ),
 }
 
 # ≥ 2 recomendações preventivas específicas por tipo de evento (story 05).
@@ -41,6 +52,38 @@ RECOMMENDATIONS_BY_KIND: dict[RiskKind, tuple[str, ...]] = {
         "Reforce telhados, toldos e estruturas leves.",
         "Guarde objetos soltos da área externa (vasos, mobiliário).",
         "Evite o litoral e árvores durante as rajadas.",
+    ),
+    # V2 (intent 005).
+    RiskKind.HEAT: (
+        "Hidrate-se e evite exposição ao sol entre 10h e 16h.",
+        "Confira a climatização do veículo e a carga elétrica da residência.",
+    ),
+    RiskKind.HEAT_WAVE: (
+        "Evite atividades ao ar livre nas horas mais quentes.",
+        "Redobre a hidratação e proteja crianças e idosos.",
+        "Confira a ventilação de ambientes fechados.",
+    ),
+    RiskKind.EXTREME_COLD: (
+        "Abrigue-se com roupas adequadas e proteja crianças e idosos.",
+        "Ventile ambientes com aquecedores para evitar acidentes.",
+    ),
+    RiskKind.FOG: (
+        "Reduza a velocidade e aumente a distância do veículo à frente.",
+        "Use faróis baixos e lanternas; evite ultrapassagens.",
+    ),
+    RiskKind.STORM: (
+        "Evite deslocamentos desnecessários durante a tempestade.",
+        "Afaste-se de janelas, árvores e estruturas metálicas.",
+        "Desligue aparelhos eletrônicos em caso de raios.",
+    ),
+    RiskKind.ROUGH_SEA: (
+        "Evite o litoral e atividades náuticas durante a ressaca.",
+        "Retire veículos de áreas sujeitas a marés e ondas.",
+    ),
+    RiskKind.MULTIPLE_RISKS: (
+        "Acompanhe os alertas oficiais e evite deslocamentos desnecessários.",
+        "Proteja veículos em local coberto e reforce estruturas externas.",
+        "Mantenha contatos de emergência acessíveis.",
     ),
 }
 

@@ -41,10 +41,13 @@ class FixtureWeatherProvider:
                 f"localização {location} sem fixture gravada "
                 f"(chave {_key(location)})"
             )
+        # Umidade é opcional na V2 (intent 005): ausente → None.
+        raw_humidity = record.get("humidity_pct")
         return WeatherSnapshot(
             location=location,
             weathercode=int(record["weathercode"]),
             precipitation_mm_h=float(record["precipitation_mm_h"]),
             wind_kmh=float(record["wind_kmh"]),
             temperature_c=float(record["temperature_c"]),
+            humidity_pct=None if raw_humidity is None else float(raw_humidity),
         )

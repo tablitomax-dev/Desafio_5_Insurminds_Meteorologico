@@ -26,7 +26,7 @@ LOCATION = GeoLocation(latitude=-23.55, longitude=-46.63)
 
 def test_parse_da_resposta_gravada():
     """Given resposta real gravada do endpoint `current`, when parse,
-    then WeatherSnapshot com weathercode/precip/vento/temperatura."""
+    then WeatherSnapshot com weathercode/precip/vento/temperatura/umidade."""
     payload = FIXTURE.read_bytes()
 
     provider = OpenMeteoProvider(fetch=lambda url, timeout: payload)
@@ -38,6 +38,43 @@ def test_parse_da_resposta_gravada():
     assert snapshot.precipitation_mm_h == 12.4
     assert snapshot.wind_kmh == 18.2
     assert snapshot.temperature_c == 21.5
+    assert snapshot.humidity_pct == 87.0
+
+
+def test_umidade_ausente_ou_nula_vira_none_sem_quebrar_parse():
+    """V2 (intent 005): degradação graciosa — `relative_humidity_2m`
+    ausente ou null → humidity_pct None (não é erro de parse)."""
+    sem_humidade = json.dumps(
+        {
+            "current": {
+                "weather_code": 0,
+                "temperature_2m": 25.0,
+                "precipitation": 0.0,
+                "wind_speed_10m": 5.0,
+            }
+        }
+    ).encode()
+    com_null = json.dumps(
+        {
+            "current": {
+                "weather_code": 0,
+                "temperature_2m": 25.0,
+                "precipitation": 0.0,
+                "wind_speed_10m": 5.0,
+                "relative_humidity_2m": None,
+            }
+        }
+    ).encode()
+
+    snapshot_sem = OpenMeteoProvider(fetch=lambda url, t: sem_humidade).current(
+        LOCATION
+    )
+    snapshot_null = OpenMeteoProvider(fetch=lambda url, t: com_null).current(
+        LOCATION
+    )
+
+    assert snapshot_sem.humidity_pct is None
+    assert snapshot_null.humidity_pct is None
 
 
 def test_url_montada_com_parametros_da_api():
@@ -56,6 +93,7 @@ def test_url_montada_com_parametros_da_api():
     assert "latitude=-23.5500" in url
     assert "longitude=-46.6300" in url
     assert "current=weather_code" in url
+    assert "relative_humidity_2m" in url
     assert "wind_speed_unit=kmh" in url
     assert "precipitation_unit=mm" in url
 
