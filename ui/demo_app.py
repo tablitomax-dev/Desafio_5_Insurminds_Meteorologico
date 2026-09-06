@@ -98,7 +98,12 @@ CONDITION_LABELS = {
     "hail": "granizo",
     "thunderstorm": "trovoada",
 }
-SEVERITY_COLOR = {"low": "green", "medium": "orange", "high": "red"}
+SEVERITY_COLOR = {
+    "low": "green",
+    "medium": "orange",
+    "high": "red",
+    "very_high": "red",
+}
 
 DATA_DIR = Path("data")
 

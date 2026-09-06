@@ -62,7 +62,7 @@ class OpenMeteoProvider:
                 "longitude": f"{location.longitude:.4f}",
                 "current": (
                     "weather_code,temperature_2m,precipitation,"
-                    "wind_speed_10m"
+                    "wind_speed_10m,relative_humidity_2m"
                 ),
                 "wind_speed_unit": "kmh",
                 "precipitation_unit": "mm",
@@ -89,12 +89,17 @@ class OpenMeteoProvider:
         try:
             data = json.loads(payload)
             current = data["current"]
+            # Umidade é opcional na V2 (intent 005): null/ausente → None
+            # (degradação graciosa; FogRule pula sem umidade).
+            raw_humidity = current.get("relative_humidity_2m")
+            humidity = None if raw_humidity is None else float(raw_humidity)
             return WeatherSnapshot(
                 location=location,
                 weathercode=int(current["weather_code"]),
                 precipitation_mm_h=float(current["precipitation"]),
                 wind_kmh=float(current["wind_speed_10m"]),
                 temperature_c=float(current["temperature_2m"]),
+                humidity_pct=humidity,
             )
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             raise WeatherProviderError(

@@ -116,7 +116,7 @@ executor usado pelas ferramentas AI-DLC deste repositório).
 
 ## Qualidade e governança
 
-- **TDD** vermelho→verde em todas as units; **124 testes** do produto +
+- **TDD** vermelho→verde em todas as units; **168 testes** do produto +
   **122** da suíte AI-DLC (`pytest`), **ruff** e **mypy** limpos.
 - **CI obrigatório** em todo PR/push para `main` (`.github/workflows/ci.yml`):
   `ruff check .` + `mypy app` + `pytest`.

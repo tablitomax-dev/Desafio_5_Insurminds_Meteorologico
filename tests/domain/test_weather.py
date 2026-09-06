@@ -50,6 +50,27 @@ class TestWeatherSnapshot:
         with pytest.raises(FrozenInstanceError):
             snapshot.weathercode = 96  # type: ignore[misc]
 
+    def test_umidade_presente_e_default_none(self):
+        """V2 (intent 005): umidade opcional — default None (desconhecida)."""
+        loc = GeoLocation(latitude=-23.55, longitude=-46.63)
+        sem_umidade = WeatherSnapshot(
+            location=loc,
+            weathercode=0,
+            precipitation_mm_h=0.0,
+            wind_kmh=5.0,
+            temperature_c=25.0,
+        )
+        com_umidade = WeatherSnapshot(
+            location=loc,
+            weathercode=0,
+            precipitation_mm_h=0.0,
+            wind_kmh=5.0,
+            temperature_c=25.0,
+            humidity_pct=97.0,
+        )
+        assert sem_umidade.humidity_pct is None
+        assert com_umidade.humidity_pct == 97.0
+
 
 class TestClassifyWeathercode:
     @pytest.mark.parametrize(

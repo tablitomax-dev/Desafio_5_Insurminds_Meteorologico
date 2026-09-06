@@ -80,6 +80,14 @@ class TestTemplateGenerator:
             (RiskKind.HEAVY_RAIN, "chuva"),
             (RiskKind.HAIL, "granizo"),
             (RiskKind.STRONG_WIND, "vento"),
+            # V2 (intent 005): novos kinds também têm mensagem mapeada.
+            (RiskKind.HEAT, "calor"),
+            (RiskKind.HEAT_WAVE, "onda de calor"),
+            (RiskKind.EXTREME_COLD, "frio"),
+            (RiskKind.FOG, "neblina"),
+            (RiskKind.STORM, "tempestade"),
+            (RiskKind.ROUGH_SEA, "ressaca"),
+            (RiskKind.MULTIPLE_RISKS, "riscos meteorológicos"),
         ],
     )
     def test_cada_tipo_de_alerta_cita_o_evento(self, generator, kind, snippet):

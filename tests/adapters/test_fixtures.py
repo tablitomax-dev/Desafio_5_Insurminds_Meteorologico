@@ -14,7 +14,14 @@ _DATA = {
         "precipitation_mm_h": 12.0,
         "wind_kmh": 15.0,
         "temperature_c": 18.0,
-    }
+    },
+    "-25.42|-49.27": {
+        "weathercode": 2,
+        "precipitation_mm_h": 0.0,
+        "wind_kmh": 11.0,
+        "temperature_c": 17.0,
+        "humidity_pct": 97.0,
+    },
 }
 
 
@@ -29,7 +36,17 @@ def test_replay_retorna_snapshot_gravado():
     assert snapshot.precipitation_mm_h == 12.0
     assert snapshot.wind_kmh == 15.0
     assert snapshot.temperature_c == 18.0
+    assert snapshot.humidity_pct is None  # sem umidade na fixture
     assert snapshot.location == GeoLocation(latitude=-23.55, longitude=-46.63)
+
+
+def test_umidade_gravada_vai_para_o_snapshot():
+    """V2 (intent 005): fixture com humidity_pct preenche o snapshot."""
+    provider = FixtureWeatherProvider(snapshots=_DATA)
+
+    snapshot = provider.current(GeoLocation(latitude=-25.42, longitude=-49.27))
+
+    assert snapshot.humidity_pct == 97.0
 
 
 def test_chave_arredondada_para_2_casas():
