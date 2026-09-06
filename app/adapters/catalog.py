@@ -34,6 +34,8 @@ def load_policy_holders(path: str | Path = DEFAULT_SEEDS_PATH) -> list[PolicyHol
                     InsuranceType(kind) for kind in record.get("insurance_types", [])
                 ),
                 is_coastal=bool(record.get("is_coastal", False)),
+                city=str(record.get("city", "")),
+                cep=str(record.get("cep", "")),
             )
         )
     return holders

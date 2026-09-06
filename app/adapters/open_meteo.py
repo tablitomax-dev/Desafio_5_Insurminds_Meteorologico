@@ -54,10 +54,12 @@ class OpenMeteoProvider:
         return self._parse(payload, location)
 
     def _fetch_with_retry(self, location: GeoLocation) -> bytes:
+        # 4 casas decimais: recomendação da própria API (≈ 11 m de
+        # precisão) e contrato da demo (intent 003 — pedido do dono).
         params = urllib.parse.urlencode(
             {
-                "latitude": location.latitude,
-                "longitude": location.longitude,
+                "latitude": f"{location.latitude:.4f}",
+                "longitude": f"{location.longitude:.4f}",
                 "current": (
                     "weather_code,temperature_2m,precipitation,"
                     "wind_speed_10m"

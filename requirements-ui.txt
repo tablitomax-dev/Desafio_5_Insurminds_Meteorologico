@@ -1,0 +1,5 @@
+# Dependências da demo visual (intent 003) — NÃO usadas pelo produto/CI.
+# O app/ continua stdlib-only; instale apenas para rodar a UI:
+#   .venv\Scripts\pip install -r requirements-ui.txt
+#   .venv\Scripts\streamlit run ui/demo_app.py
+streamlit==1.63.0

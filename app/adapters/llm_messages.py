@@ -150,12 +150,20 @@ class LlmGenerator:
         return "híbrido (LLM + template no fallback)"
 
 
-def build_generator(*, model: str | None = None) -> MessageGenerator:
-    """Composition-root helper: env decide entre LLM e template."""
+def build_generator(
+    *, model: str | None = None, provider: str | None = None
+) -> MessageGenerator:
+    """Composition-root helper: opções explícitas OU env decidem (story 06).
+
+    `model`/`provider` passados (UI da intent 003) vencem; `None` cai no
+    env (`LLM_MODEL`/`LLM_PROVIDER`).
+    """
     model_id = model if model is not None else os.getenv("LLM_MODEL", "")
-    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
-    provider_wants_llm = provider == "llm"
-    provider_forces_template = provider == "template"
+    provider_id = (
+        provider if provider is not None else os.getenv("LLM_PROVIDER", "")
+    ).strip().lower()
+    provider_wants_llm = provider_id == "llm"
+    provider_forces_template = provider_id == "template"
 
     if provider_wants_llm or (model_id.strip() and not provider_forces_template):
         return LlmGenerator(model=model_id.strip() or DEFAULT_MODEL)

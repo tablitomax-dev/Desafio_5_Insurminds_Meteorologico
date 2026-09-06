@@ -1,0 +1,5 @@
+# Tema de la demo visual (intent 003) — Streamlit.
+# primaryColor verde: el botón primario "Rodar rodada" y los elementos
+# activos heredan este color (contraste AA con texto blanco).
+[theme]
+primaryColor = "#1a7f37"

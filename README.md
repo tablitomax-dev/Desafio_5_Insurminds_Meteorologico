@@ -39,6 +39,30 @@ eventos detectados, alertas por regra, mensagens geradas (com o **modo**:
 `TemplateGenerator` (com retry para erros transitórios de API), e o modo
 exercitado é sempre reportado.
 
+## Demo visual (Streamlit)
+
+A mesma rodada da CLI em interface interativa (reusa o **mesmo composition
+root**, `app/composition.py`):
+
+```bash
+.venv\Scripts\pip install -r requirements-ui.txt   # só a demo visual (fora do CI)
+.venv\Scripts\streamlit run ui/demo_app.py
+```
+
+Na barra lateral: fonte meteorológica (Open-Meteo real por default ou
+fixtures offline determinísticas) e modo de mensagem (LLM com fallback
+por default, ou template determinístico). A **bancada de simulação**
+permite editar os dados fictícios — nome, telefone, **CEP** (resolve
+bairro/cidade e coordenadas via BrasilAPI, com degradação graciosa),
+perfil de seguros, litoral e, no offline, o tempo simulado (o alerta é
+gerado automaticamente pelas regras analisando o tempo informado). A tela
+mostra KPIs da rodada, a tabela de **segurados monitorados** (bairro/
+cidade — bairros reais validados via OpenStreetMap/Nominatim —,
+coordenadas a 4 casas, tempo atual e alerta gerado), alertas por regra,
+as mensagens preventivas com o **modo exercitado** sempre reportado
+(template, llm ou fallback) e o relatório textual idêntico ao da CLI
+num expander. Nenhuma regra de negócio na UI.
+
 ## Regras de negócio (detecção de risco)
 
 | Evento | Gatilho | Impactados | Severidade |
@@ -75,7 +99,7 @@ executor usado pelas ferramentas AI-DLC deste repositório).
 
 ## Qualidade e governança
 
-- **TDD** vermelho→verde em todas as units; **103 testes** do produto +
+- **TDD** vermelho→verde em todas as units; **111 testes** do produto +
   **122** da suíte AI-DLC (`pytest`), **ruff** e **mypy** limpos.
 - **CI obrigatório** em todo PR/push para `main` (`.github/workflows/ci.yml`):
   `ruff check .` + `mypy app` + `pytest`.
@@ -86,7 +110,8 @@ executor usado pelas ferramentas AI-DLC deste repositório).
 ## Estrutura
 
 ```text
-app/            produto (domain, adapters, pipeline, cli)
+app/            produto (domain, adapters, composition, pipeline, cli)
+ui/             demo visual (Streamlit, shell fino sobre app/composition)
 tests/          testes do produto (pytest; pythonpath=. via pytest.ini)
 data/           seeds de segurados + fixtures meteorológicas da demo offline
 docs/           decisões (ADRs) e tasks da ferramenta AI-DLC

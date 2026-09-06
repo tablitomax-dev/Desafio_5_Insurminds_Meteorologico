@@ -66,6 +66,21 @@ class GeoLocation:
 
 
 @dataclass(frozen=True)
+class CepLocation:
+    """Resultado do geocoding de um CEP (intent 003 — BrasilAPI).
+
+    `location` é `None` quando a base não tem coordenadas para o CEP
+    (ex.: CEPs municipais) — degradação graciosa, sem exceção.
+    """
+
+    cep: str
+    location: GeoLocation | None
+    bairro: str
+    cidade: str
+    uf: str
+
+
+@dataclass(frozen=True)
 class WeatherSnapshot:
     """Estado meteorológico pontual de uma GeoLocation.
 
