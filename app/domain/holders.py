@@ -26,6 +26,9 @@ class PolicyHolder:
     `is_coastal` marca região costeira — sinal usado pela StrongWindRule
     (story 04). Seeds preenchem o mix residencial/auto/litoral/rural.
     `city` é rótulo de apresentação (UI da banca, intent 003).
+    `telegram_chat_id` é o destino real do envio (intent 004): a
+    Telegram Bot API entrega por chat_id — NUNCA por número de telefone
+    — e o vínculo nasce quando o segurado inicia a conversa com o bot.
     """
 
     id: str
@@ -36,6 +39,7 @@ class PolicyHolder:
     is_coastal: bool = False
     city: str = ""
     cep: str = ""  # geocoding via BrasilAPI (intent 003)
+    telegram_chat_id: str = ""  # envio real via Telegram (intent 004)
 
     def has_insurance(self, kind: InsuranceType) -> bool:
         return kind in self.insurance_types

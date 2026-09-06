@@ -98,3 +98,13 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
 - **Path**: `docs/decisions/007-brasilapi-cep-geocoding.md` | `app/adapters/brasil_api.py` | `app/domain/ports.py` (`CepGeocoder`, `GeocodingError`) | `app/domain/weather.py` (`CepLocation`)
 - **Summary**: A bancada da demo substituiu edição de lat/lon por **CEP**: BrasilAPI CEP v2 resolve bairro/cidade/UF + coordenadas em 1 chamada (sem key). Cliente stdlib urllib (ADR-005) com **User-Agent próprio obrigatório** (urllib default recebe 403). Degradacao graciosa: CEP sem coords na base ou falha de rede → coords dos seeds + aviso na UI (nunca quebra a rodada); CEP inválido/404 → `GeocodingError` imediato. Cache por sessão; seeds com CEPs reais (01016-020 … 12210-060).
 - **Read when**: Ao implementar/alterar geocoding de CEP, a bancada da UI, ou ao avaliar trocar/adicionar provedor de geocoding.
+
+---
+
+### ADR-008: Telegram Bot API como canal real de entrega (intent 004)
+- **Status**: accepted
+- **Date**: 2026-09-06
+- **Bolt**: N/A (intent 004-telegram-delivery, aprovada pelo dono)
+- **Path**: `docs/decisions/008-telegram-bot-api-delivery.md` | `app/adapters/telegram_api.py` | `app/domain/notify.py` (`NotificationRecord.detail`) | `app/composition.py` (`build_sender`)
+- **Summary**: Envio real via **TelegramSender** implementando a port `NotificationSender` existente — domínio/pipeline intactos. Restrição da plataforma: entrega por `chat_id` (NUNCA por telefone) e só para conversas iniciadas; **linking** telefone → chat_id via fluxo `/start` + contato compartilhado (`getUpdates`), casando o `phone_number` com o telefone da bancada. Token em `TELEGRAM_BOT_TOKEN` (env, contrato igual ao gerador LLM) + campo secreto na UI (não persiste). Degradação graciosa: `sent`/`failed`/`skipped` com motivo em `NotificationRecord.detail` — falha NUNCA quebra a rodada; texto da story 07 preservado para o canal SMS/CLI.
+- **Read when**: Ao implementar/alterar o envio (canais, linking, token, status de entrega), ou ao avaliar adicionar outro canal real (SMS/WhatsApp).

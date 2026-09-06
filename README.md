@@ -1,7 +1,8 @@
 # Desafio 5 I2A2 — Ferramenta Inteligente para Comunicação Proativa com o Segurado
 
 > Monitoramento meteorológico público → detecção de risco por perfil de seguro →
-> mensagem preventiva personalizada (template ou LLM) → envio simulado + relatório.
+> mensagem preventiva personalizada (template ou LLM) → envio (simulado ou
+> Telegram real) + relatório.
 
 ## O problema
 
@@ -63,6 +64,21 @@ as mensagens preventivas com o **modo exercitado** sempre reportado
 (template, llm ou fallback) e o relatório textual idêntico ao da CLI
 num expander. Nenhuma regra de negócio na UI.
 
+### Envio real via Telegram
+
+No seletor **Envio**, troque "Simulado (SMS)" por "Telegram (real)":
+
+1. Crie o bot no [@BotFather](https://t.me/BotFather) (`/newbot`) e cole o
+   token no campo secreto da sidebar (não é persistido; alternativa: env
+   `TELEGRAM_BOT_TOKEN`).
+2. O segurado manda `/start` no bot e **compartilha o contato** — o
+   Telegram entrega por `chat_id`, nunca por número de telefone.
+3. Clique em **"Vincular contatos"**: o bot casa o telefone compartilhado
+   com o telefone da bancada e preenche a coluna **Chat ID**.
+4. "Disparar Alertas" entrega a mensagem real no chat vinculado
+   (status `sent`). Sem token ou chat_id o envio vira `skipped` com o
+   motivo — e a rodada segue intacta (degradação graciosa, ADR-008).
+
 ## Regras de negócio (detecção de risco)
 
 | Evento | Gatilho | Impactados | Severidade |
@@ -88,9 +104,10 @@ fixtures ────► adapters/fixtures ────┴─► pipeline.py ─
 - **Domain puro e sem I/O** (`app/domain/`): regras de risco declarativas,
   ports (`WeatherProvider`, `PolicyHolderRepository`, `MessageGenerator`,
   `NotificationSender`) e entidades.
-- **Adapters** (`app/adapters/`): Open-Meteo (stdlib-only), catálogo
-  in-memory com seeds JSON, fixtures para demo offline e `LlmGenerator`
-  (import lazy de Pydantic AI — o modo template nunca exige o SDK).
+- **Adapters** (`app/adapters/`): Open-Meteo e BrasilAPI (geocoding de
+  CEP) e Telegram (envio real) — todos stdlib-only —, catálogo in-memory
+  com seeds JSON, fixtures para demo offline e `LlmGenerator` (import
+  lazy de Pydantic AI — o modo template nunca exige o SDK).
 - **Pipeline** recebe ports prontas; a **CLI** é o composition root
   (`LLM_MODEL`/`LLM_PROVIDER` selecionam a implementação da mensagem).
 
@@ -99,7 +116,7 @@ executor usado pelas ferramentas AI-DLC deste repositório).
 
 ## Qualidade e governança
 
-- **TDD** vermelho→verde em todas as units; **111 testes** do produto +
+- **TDD** vermelho→verde em todas as units; **124 testes** do produto +
   **122** da suíte AI-DLC (`pytest`), **ruff** e **mypy** limpos.
 - **CI obrigatório** em todo PR/push para `main` (`.github/workflows/ci.yml`):
   `ruff check .` + `mypy app` + `pytest`.

@@ -1,4 +1,4 @@
-"""Demo visual (Streamlit) — intent 003.
+"""Demo visual (Streamlit) — intents 003 e 004.
 
 Shell fino de apresentação + BANCADA DE SIMULAÇÃO da banca: nenhuma
 regra de negócio aqui. Monta a rodada via `app.composition` (o MESMO
@@ -19,6 +19,14 @@ edita latitude/longitude diretamente (pedido do dono, 2026-09-06).
 Ao digitar um CEP válido, o geocode é AUTOMÁTICO: bairro/cidade e o
 clima da região aparecem na hora (pedido do dono, 2026-09-06). O perfil
 de litoral NÃO é editável (vem dos seeds — regra do vento).
+
+Envio (intent 004): "Simulado (SMS)" (comportamento original) ou
+"Telegram (real)" — o `TelegramSender` entrega por chat_id (a API do
+Telegram NÃO envia por telefone). O token vem do campo secreto da
+sidebar (não persiste) ou de TELEGRAM_BOT_TOKEN. Linking: o segurado
+manda /start no bot e compartilha o contato → botão "Vincular
+contatos" casa o telefone da bancada e preenche a coluna Chat ID.
+Sem token/chat_id o envio vira "skipped" — nunca quebra a rodada.
 
 Nota de implementação: `data_editor` NÃO aceita valor setado via
 `st.session_state` (política do Streamlit); edições ficam no estado do
@@ -53,7 +61,15 @@ from app.adapters.brasil_api import BrasilApiGeocoder  # noqa: E402
 from app.adapters.catalog import load_policy_holders  # noqa: E402
 from app.adapters.llm_messages import DEFAULT_MODEL  # noqa: E402
 from app.adapters.open_meteo import OpenMeteoProvider  # noqa: E402
-from app.composition import run_proactive_round  # noqa: E402
+from app.adapters.telegram_api import (  # noqa: E402
+    TelegramApiError,
+    fetch_recent_contacts,
+)
+from app.composition import (  # noqa: E402
+    DELIVERY_SIMULATED,
+    DELIVERY_TELEGRAM,
+    run_proactive_round,
+)
 from app.domain.holders import InsuranceType, PolicyHolder  # noqa: E402
 from app.domain.ports import GeocodingError, WeatherProviderError  # noqa: E402
 from app.domain.weather import GeoLocation, classify_weathercode  # noqa: E402
@@ -64,6 +80,8 @@ FONTE_ONLINE, FONTE_OFFLINE = "Online (Open-Meteo)", "Offline (fixtures)"
 FONTES = (FONTE_ONLINE, FONTE_OFFLINE)
 MODO_LLM, MODO_TEMPLATE = "LLM (reescrita)", "Template (determinístico)"
 MODOS = (MODO_LLM, MODO_TEMPLATE)
+ENVIO_SIMULADO, ENVIO_TELEGRAM = "Simulado (SMS)", "Telegram (real)"
+ENVIOS = (ENVIO_SIMULADO, ENVIO_TELEGRAM)
 EVENT_LABELS = {
     "heavy_rain": "chuva intensa",
     "hail": "granizo",
@@ -114,6 +132,7 @@ def _holders_iniciais() -> pd.DataFrame:
                 "cep": h.cep,
                 "seguros": ", ".join(sorted(t.value for t in h.insurance_types)),
                 "cidade": h.city,
+                "telegram_chat_id": h.telegram_chat_id,
             }
             for h in holders
         ]
@@ -150,6 +169,58 @@ def _tempo_desc(weathercode: int, precip: float, vento: float, temp: float) -> s
     )
 
 
+def _vincular_contatos(token: str) -> None:
+    """Linking telefone → chat_id via getUpdates (intent 004).
+
+    Casa o `phone_number` compartilhado com o telefone da bancada
+    (só dígitos) e preenche a coluna Chat ID. O resultado fica em
+    session_state e é exibido no corpo após o rerun (o botão vive na
+    sidebar; mensagens grandes leem melhor no corpo).
+    """
+    try:
+        contatos = fetch_recent_contacts(token)
+    except TelegramApiError as exc:
+        st.session_state["telegram_linking"] = ("erro", str(exc), [])
+        st.rerun()
+        return
+    rows = st.session_state["bancada_holders_df"].to_dict("records")
+    por_telefone = {
+        "".join(ch for ch in str(r["telefone"]) if ch.isdigit()): str(r["id"])
+        for r in rows
+    }
+    vinculados: list[str] = []
+    sem_match: list[str] = []
+    mudou = False
+    for contato in contatos:
+        pid = por_telefone.get(
+            "".join(ch for ch in contato.phone if ch.isdigit())
+        )
+        if pid:
+            for r in rows:
+                if str(r["id"]) == pid and str(
+                    r.get("telegram_chat_id") or ""
+                ) != contato.chat_id:
+                    r["telegram_chat_id"] = contato.chat_id
+                    mudou = True
+            vinculados.append(
+                f"{contato.first_name or pid} ({pid}) → chat {contato.chat_id}"
+            )
+        else:
+            sem_match.append(
+                f"{contato.first_name or 'sem nome'} — chat {contato.chat_id}"
+                + (
+                    f", telefone {contato.phone}"
+                    if contato.phone
+                    else " (sem contato compartilhado)"
+                )
+            )
+    if mudou:
+        st.session_state["bancada_holders_df"] = pd.DataFrame(rows)
+        st.session_state["bancada_holders_version"] += 1
+    st.session_state["telegram_linking"] = ("ok", vinculados, sem_match)
+    st.rerun()
+
+
 st.set_page_config(page_title="Comunicação proativa com o segurado")
 
 st.session_state.setdefault("round_result", None)
@@ -164,6 +235,9 @@ st.session_state.setdefault("bancada_tempo_version", 0)
 st.session_state.setdefault("cep_cache", {})
 # Preview de clima por segurado (online: Open-Meteo nas coords do CEP).
 st.session_state.setdefault("clima_preview", {})
+# Resultado do linking Telegram (intent 004): ("erro", motivo, []) ou
+# ("ok", vinculados, sem_match).
+st.session_state.setdefault("telegram_linking", None)
 
 with st.sidebar:
     st.header("Rodada")
@@ -185,6 +259,30 @@ with st.sidebar:
             " erro de API: fallback silencioso para template — o modo"
             " exercitado é sempre reportado."
         )
+    envio = st.segmented_control(
+        "Envio", ENVIOS, default=ENVIO_SIMULADO, key="envio"
+    )
+    telegram_token = ""
+    if envio == ENVIO_TELEGRAM:
+        telegram_token = st.text_input(
+            "Token do bot (Telegram)",
+            type="password",
+            key="telegram_token",
+            help="Criado no @BotFather (/newbot). Não é persistido — vive"
+            " só nesta sessão. Alternativa: env TELEGRAM_BOT_TOKEN.",
+        )
+        st.caption(
+            "O Telegram entrega por chat_id (não por telefone). Peça ao"
+            " segurado mandar /start no bot e compartilhar o contato;"
+            " depois clique em “Vincular contatos”."
+        )
+        if st.button(
+            "Vincular contatos",
+            icon=":material/link:",
+            width="stretch",
+            disabled=not telegram_token,
+        ):
+            _vincular_contatos(telegram_token)
     if st.button(
         "Restaurar dados originais",
         icon=":material/restart_alt:",
@@ -208,8 +306,33 @@ with st.sidebar:
 st.title("Comunicação proativa com o segurado")
 st.caption(
     "Monitoramento meteorológico público → detecção de risco por perfil de"
-    " seguro → mensagem preventiva personalizada → envio simulado."
+    " seguro → mensagem preventiva personalizada → envio (simulado ou"
+    " Telegram)."
 )
+
+# Resultado do linking Telegram (intent 004) — exibido no corpo, após
+# o rerun disparado pelo botão da sidebar.
+linking = st.session_state.get("telegram_linking")
+if linking:
+    if linking[0] == "erro":
+        st.warning(
+            f"Linking Telegram falhou (a bancada segue normalmente):"
+            f" {linking[1]}"
+        )
+    else:
+        vinculados, sem_match = linking[1], linking[2]
+        if vinculados:
+            st.success("Vinculados por telefone: " + "; ".join(vinculados))
+        if sem_match:
+            st.info(
+                "Sem match por telefone (copie o chat_id na bancada): "
+                + "; ".join(sem_match)
+            )
+        if not vinculados and not sem_match:
+            st.info(
+                "Nenhum update novo no bot — peça ao segurado mandar /start"
+                " e compartilhar o contato, depois clique novamente."
+            )
 
 # --- Bancada de simulação (dados fictícios editáveis pela banca) ---
 st.subheader("Bancada de simulação")
@@ -239,6 +362,7 @@ bancada_holders = st.data_editor(
         "cep": st.column_config.TextColumn("CEP (00000-000)"),
         "seguros": st.column_config.TextColumn("Seguros (residential/auto)"),
         "cidade": st.column_config.TextColumn("Bairro/cidade"),
+        "telegram_chat_id": st.column_config.TextColumn("Chat ID Telegram"),
     },
     hide_index=True,
 )
@@ -388,6 +512,7 @@ if rodar:
                 insurance_types=_seguros_parse(row["seguros"]),
                 is_coastal=(seed.is_coastal if seed is not None else False),
                 city=str(row["cidade"]),
+                telegram_chat_id=str(row.get("telegram_chat_id") or ""),
             )
         )
 
@@ -403,6 +528,9 @@ if rodar:
             if h.id in tempo_por_id
         }
 
+    delivery = (
+        DELIVERY_TELEGRAM if envio == ENVIO_TELEGRAM else DELIVERY_SIMULATED
+    )
     with st.spinner("Disparando alertas..."):
         report, mode = run_proactive_round(
             offline=(fonte == FONTE_OFFLINE),
@@ -410,11 +538,18 @@ if rodar:
             llm_provider=("llm" if modo == MODO_LLM else "template"),
             holders=holders_editados,
             weather_snapshots=weather_snapshots,
+            delivery=delivery,
+            telegram_token=(
+                (telegram_token or None)
+                if envio == ENVIO_TELEGRAM
+                else None
+            ),
         )
     st.session_state.round_result = {
         "report": report,
         "mode": mode,
         "fonte": fonte,
+        "envio": envio,
         "holders": {h.id: h for h in holders_editados},
     }
 
@@ -430,8 +565,11 @@ else:
         st.metric("Segurados consultados", report.holders_consulted, border=True)
         st.metric("Eventos detectados", len(report.alerts), border=True)
         st.metric("Mensagens geradas", len(report.messages), border=True)
-        st.metric("Envios simulados", len(report.sends), border=True)
-    st.caption(f"Fonte: {result['fonte']} — modo de mensagem exercitado: {mode}")
+        st.metric("Envios despachados", len(report.sends), border=True)
+    st.caption(
+        f"Fonte: {result['fonte']} — modo de mensagem exercitado: {mode}"
+        f" — envio: {result.get('envio') or ENVIO_SIMULADO}"
+    )
 
     if report.failures:
         motivos = "\n".join(
@@ -492,7 +630,7 @@ else:
         ]
         st.dataframe(rows, hide_index=True)
 
-    st.subheader("Mensagens preventivas (envio simulado)")
+    st.subheader("Mensagens preventivas")
     for alert, message, send in zip(
         report.alerts, report.messages, report.sends, strict=True
     ):
@@ -508,10 +646,20 @@ else:
             )
             with st.chat_message("assistant"):
                 st.markdown(message.text)
-            st.caption(
-                f"Envio simulado via {send.channel} para {phone} — status:"
-                f" {send.status} | {len(message.text)} caracteres"
+            destino = (
+                phone
+                if send.channel == "sms"
+                else (
+                    holder.telegram_chat_id if holder is not None else "—"
+                )
             )
+            caption = (
+                f"Envio via {send.channel} para {destino} — status:"
+                f" {send.status}"
+            )
+            if send.detail:
+                caption += f" | {send.detail}"
+            st.caption(f"{caption} | {len(message.text)} caracteres")
 
     with st.expander("Relatório textual (idêntico ao da CLI)"):
         st.code(format_report(report, generator_name=mode), language=None)
