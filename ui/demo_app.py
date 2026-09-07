@@ -1,4 +1,4 @@
-"""Demo visual (Streamlit) — intents 003 e 004.
+"""Demo visual (Streamlit) — intents 003, 004 e 006.
 
 Shell fino de apresentação + BANCADA DE SIMULAÇÃO da banca: nenhuma
 regra de negócio aqui. Monta a rodada via `app.composition` (o MESMO
@@ -20,13 +20,16 @@ Ao digitar um CEP válido, o geocode é AUTOMÁTICO: bairro/cidade e o
 clima da região aparecem na hora (pedido do dono, 2026-09-06). O perfil
 de litoral NÃO é editável (vem dos seeds — regra do vento).
 
-Envio (intent 004): "Simulado (SMS)" (comportamento original) ou
-"Telegram (real)" — o `TelegramSender` entrega por chat_id (a API do
-Telegram NÃO envia por telefone). O token vem do campo secreto da
-sidebar (não persiste) ou de TELEGRAM_BOT_TOKEN. Linking: o segurado
-manda /start no bot e compartilha o contato → botão "Vincular
-contatos" casa o telefone da bancada e preenche a coluna Chat ID.
-Sem token/chat_id o envio vira "skipped" — nunca quebra a rodada.
+Envio (intents 004/006): SOMENTE Telegram real (o seletor de SMS foi
+removido a pedido do dono). O `TelegramSender` resolve o chat_id por
+TELEFONE no repositório de vínculos SQLite (`data/telegram_links.db` —
+fora do Git; ADR-010): a bancada NÃO tem coluna de chat_id. O token vem
+do campo secreto da sidebar (não persiste) ou de TELEGRAM_BOT_TOKEN.
+Linking: segurado manda /start no bot → "Vincular contatos" grava no
+SQL quem compartilhou o contato e envia o teclado "Compartilhar meu
+contato" (`request_contact`) para quem só deu /start — ao tocar no
+botão, o próximo clique vincula. Sem token/vínculo o envio vira
+"skipped" — nunca quebra a rodada.
 
 Nota de implementação: `data_editor` NÃO aceita valor setado via
 `st.session_state` (política do Streamlit); edições ficam no estado do
@@ -64,12 +67,12 @@ from app.adapters.open_meteo import OpenMeteoProvider  # noqa: E402
 from app.adapters.telegram_api import (  # noqa: E402
     TelegramApiError,
     fetch_recent_contacts,
+    send_contact_request,
 )
-from app.composition import (  # noqa: E402
-    DELIVERY_SIMULATED,
-    DELIVERY_TELEGRAM,
-    run_proactive_round,
+from app.adapters.telegram_links_sqlite import (  # noqa: E402
+    SqliteTelegramLinkRepository,
 )
+from app.composition import run_proactive_round  # noqa: E402
 from app.domain.holders import InsuranceType, PolicyHolder  # noqa: E402
 from app.domain.ports import GeocodingError, WeatherProviderError  # noqa: E402
 from app.domain.weather import GeoLocation, classify_weathercode  # noqa: E402
@@ -80,12 +83,18 @@ FONTE_ONLINE, FONTE_OFFLINE = "Online (Open-Meteo)", "Offline (fixtures)"
 FONTES = (FONTE_ONLINE, FONTE_OFFLINE)
 MODO_LLM, MODO_TEMPLATE = "LLM (reescrita)", "Template (determinístico)"
 MODOS = (MODO_LLM, MODO_TEMPLATE)
-ENVIO_SIMULADO, ENVIO_TELEGRAM = "Simulado (SMS)", "Telegram (real)"
-ENVIOS = (ENVIO_SIMULADO, ENVIO_TELEGRAM)
 EVENT_LABELS = {
     "heavy_rain": "chuva intensa",
     "hail": "granizo",
     "strong_wind": "vento forte",
+    # V2 (intent 005).
+    "heat": "calor intenso",
+    "heat_wave": "onda de calor",
+    "extreme_cold": "frio intenso",
+    "fog": "neblina",
+    "storm": "tempestade",
+    "rough_sea": "ressaca",
+    "multiple_risks": "múltiplos riscos",
 }
 CONDITION_LABELS = {
     "clear": "céu limpo",
@@ -137,7 +146,6 @@ def _holders_iniciais() -> pd.DataFrame:
                 "cep": h.cep,
                 "seguros": ", ".join(sorted(t.value for t in h.insurance_types)),
                 "cidade": h.city,
-                "telegram_chat_id": h.telegram_chat_id,
             }
             for h in holders
         ]
@@ -174,55 +182,41 @@ def _tempo_desc(weathercode: int, precip: float, vento: float, temp: float) -> s
     )
 
 
-def _vincular_contatos(token: str) -> None:
-    """Linking telefone → chat_id via getUpdates (intent 004).
+def _vincular_contatos(token: str, links: SqliteTelegramLinkRepository) -> None:
+    """Linking telefone → chat_id gravado no SQL (intents 004/006).
 
-    Casa o `phone_number` compartilhado com o telefone da bancada
-    (só dígitos) e preenche a coluna Chat ID. O resultado fica em
-    session_state e é exibido no corpo após o rerun (o botão vive na
-    sidebar; mensagens grandes leem melhor no corpo).
+    `fetch_recent_contacts` lê o `getUpdates`; quem compartilhou o
+    contato é gravado no repositório (upsert por telefone). Quem só
+    mandou /start recebe o teclado "Compartilhar meu contato"
+    (`request_contact`) — ao tocar, o próximo clique vincula. O
+    resultado fica em session_state e é exibido no corpo após o rerun.
     """
     try:
         contatos = fetch_recent_contacts(token)
     except TelegramApiError as exc:
-        st.session_state["telegram_linking"] = ("erro", str(exc), [])
+        st.session_state["telegram_linking"] = ("erro", str(exc), [], [])
         st.rerun()
         return
-    rows = st.session_state["bancada_holders_df"].to_dict("records")
-    por_telefone = {
-        "".join(ch for ch in str(r["telefone"]) if ch.isdigit()): str(r["id"])
-        for r in rows
-    }
     vinculados: list[str] = []
-    sem_match: list[str] = []
-    mudou = False
+    pedidos: list[str] = []
+    erros: list[str] = []
     for contato in contatos:
-        pid = por_telefone.get(
-            "".join(ch for ch in contato.phone if ch.isdigit())
-        )
-        if pid:
-            for r in rows:
-                if str(r["id"]) == pid and str(
-                    r.get("telegram_chat_id") or ""
-                ) != contato.chat_id:
-                    r["telegram_chat_id"] = contato.chat_id
-                    mudou = True
+        if contato.is_contact_shared:
+            links.upsert_link(contato.phone, contato.chat_id, contato.first_name)
             vinculados.append(
-                f"{contato.first_name or pid} ({pid}) → chat {contato.chat_id}"
+                f"{contato.first_name or 'sem nome'}"
+                f" (telefone {contato.phone}) → chat {contato.chat_id}"
             )
-        else:
-            sem_match.append(
+            continue
+        # /start sem contato: pede o contato via teclado do bot.
+        try:
+            send_contact_request(token, contato.chat_id)
+            pedidos.append(
                 f"{contato.first_name or 'sem nome'} — chat {contato.chat_id}"
-                + (
-                    f", telefone {contato.phone}"
-                    if contato.phone
-                    else " (sem contato compartilhado)"
-                )
             )
-    if mudou:
-        st.session_state["bancada_holders_df"] = pd.DataFrame(rows)
-        st.session_state["bancada_holders_version"] += 1
-    st.session_state["telegram_linking"] = ("ok", vinculados, sem_match)
+        except TelegramApiError as exc:
+            erros.append(f"chat {contato.chat_id}: {exc}")
+    st.session_state["telegram_linking"] = ("ok", vinculados, pedidos, erros)
     st.rerun()
 
 
@@ -240,8 +234,8 @@ st.session_state.setdefault("bancada_tempo_version", 0)
 st.session_state.setdefault("cep_cache", {})
 # Preview de clima por segurado (online: Open-Meteo nas coords do CEP).
 st.session_state.setdefault("clima_preview", {})
-# Resultado do linking Telegram (intent 004): ("erro", motivo, []) ou
-# ("ok", vinculados, sem_match).
+# Resultado do linking Telegram: ("erro", motivo, [], []) ou
+# ("ok", vinculados, pedidos_de_contato, erros).
 st.session_state.setdefault("telegram_linking", None)
 
 with st.sidebar:
@@ -264,30 +258,28 @@ with st.sidebar:
             " erro de API: fallback silencioso para template — o modo"
             " exercitado é sempre reportado."
         )
-    envio = st.segmented_control(
-        "Envio", ENVIOS, default=ENVIO_SIMULADO, key="envio"
+    st.subheader("Telegram")
+    telegram_token = st.text_input(
+        "Token do bot (Telegram)",
+        type="password",
+        key="telegram_token",
+        help="Criado no @BotFather (/newbot). Não é persistido — vive"
+        " só nesta sessão. Alternativa: env TELEGRAM_BOT_TOKEN.",
     )
-    telegram_token = ""
-    if envio == ENVIO_TELEGRAM:
-        telegram_token = st.text_input(
-            "Token do bot (Telegram)",
-            type="password",
-            key="telegram_token",
-            help="Criado no @BotFather (/newbot). Não é persistido — vive"
-            " só nesta sessão. Alternativa: env TELEGRAM_BOT_TOKEN.",
+    st.caption(
+        "O destino é resolvido por TELEFONE no banco de vínculos"
+        " (data/telegram_links.db). Peça ao segurado mandar /start no bot;"
+        " quem não compartilhar o contato recebe o botão do próprio bot."
+    )
+    if st.button(
+        "Vincular contatos",
+        icon=":material/link:",
+        width="stretch",
+        disabled=not telegram_token,
+    ):
+        _vincular_contatos(
+            telegram_token, SqliteTelegramLinkRepository(DATA_DIR / "telegram_links.db")
         )
-        st.caption(
-            "O Telegram entrega por chat_id (não por telefone). Peça ao"
-            " segurado mandar /start no bot e compartilhar o contato;"
-            " depois clique em “Vincular contatos”."
-        )
-        if st.button(
-            "Vincular contatos",
-            icon=":material/link:",
-            width="stretch",
-            disabled=not telegram_token,
-        ):
-            _vincular_contatos(telegram_token)
     if st.button(
         "Restaurar dados originais",
         icon=":material/restart_alt:",
@@ -311,12 +303,12 @@ with st.sidebar:
 st.title("Comunicação proativa com o segurado")
 st.caption(
     "Monitoramento meteorológico público → detecção de risco por perfil de"
-    " seguro → mensagem preventiva personalizada → envio (simulado ou"
-    " Telegram)."
+    " seguro → mensagem preventiva personalizada → envio real via Telegram"
+    " (destino resolvido por telefone no banco de vínculos)."
 )
 
-# Resultado do linking Telegram (intent 004) — exibido no corpo, após
-# o rerun disparado pelo botão da sidebar.
+# Resultado do linking Telegram — exibido no corpo, após o rerun
+# disparado pelo botão da sidebar.
 linking = st.session_state.get("telegram_linking")
 if linking:
     if linking[0] == "erro":
@@ -325,18 +317,21 @@ if linking:
             f" {linking[1]}"
         )
     else:
-        vinculados, sem_match = linking[1], linking[2]
+        vinculados, pedidos, erros = linking[1], linking[2], linking[3]
         if vinculados:
-            st.success("Vinculados por telefone: " + "; ".join(vinculados))
-        if sem_match:
+            st.success("Vínculos gravados no banco: " + "; ".join(vinculados))
+        if pedidos:
             st.info(
-                "Sem match por telefone (copie o chat_id na bancada): "
-                + "; ".join(sem_match)
+                "Pedido de contato enviado pelo bot (toquem no botão"
+                " “Compartilhar meu contato” no Telegram e clique em"
+                " “Vincular contatos” de novo): " + "; ".join(pedidos)
             )
-        if not vinculados and not sem_match:
+        if erros:
+            st.warning("Falhas ao pedir contato: " + "; ".join(erros))
+        if not vinculados and not pedidos and not erros:
             st.info(
                 "Nenhum update novo no bot — peça ao segurado mandar /start"
-                " e compartilhar o contato, depois clique novamente."
+                " no bot e clique novamente."
             )
 
 # --- Bancada de simulação (dados fictícios editáveis pela banca) ---
@@ -367,7 +362,6 @@ bancada_holders = st.data_editor(
         "cep": st.column_config.TextColumn("CEP (00000-000)"),
         "seguros": st.column_config.TextColumn("Seguros (residential/auto)"),
         "cidade": st.column_config.TextColumn("Bairro/cidade"),
-        "telegram_chat_id": st.column_config.TextColumn("Chat ID Telegram"),
     },
     hide_index=True,
 )
@@ -463,7 +457,6 @@ if fonte == FONTE_OFFLINE:
 else:
     # Online: clima REAL nas coords de cada CEP resolvido (1 chamada por
     # CEP novo; preview persiste na sessão).
-    seeds = {h.id: h for h in load_policy_holders(DATA_DIR / "policy_holders.json")}
     preview_rows = []
     provider = OpenMeteoProvider()
     for row in rows:
@@ -517,7 +510,6 @@ if rodar:
                 insurance_types=_seguros_parse(row["seguros"]),
                 is_coastal=(seed.is_coastal if seed is not None else False),
                 city=str(row["cidade"]),
-                telegram_chat_id=str(row.get("telegram_chat_id") or ""),
             )
         )
 
@@ -533,9 +525,6 @@ if rodar:
             if h.id in tempo_por_id
         }
 
-    delivery = (
-        DELIVERY_TELEGRAM if envio == ENVIO_TELEGRAM else DELIVERY_SIMULATED
-    )
     with st.spinner("Disparando alertas..."):
         report, mode = run_proactive_round(
             offline=(fonte == FONTE_OFFLINE),
@@ -543,18 +532,16 @@ if rodar:
             llm_provider=("llm" if modo == MODO_LLM else "template"),
             holders=holders_editados,
             weather_snapshots=weather_snapshots,
-            delivery=delivery,
-            telegram_token=(
-                (telegram_token or None)
-                if envio == ENVIO_TELEGRAM
-                else None
+            delivery="telegram",
+            telegram_token=(telegram_token or None),
+            link_repository=SqliteTelegramLinkRepository(
+                DATA_DIR / "telegram_links.db"
             ),
         )
     st.session_state.round_result = {
         "report": report,
         "mode": mode,
         "fonte": fonte,
-        "envio": envio,
         "holders": {h.id: h for h in holders_editados},
     }
 
@@ -573,7 +560,7 @@ else:
         st.metric("Envios despachados", len(report.sends), border=True)
     st.caption(
         f"Fonte: {result['fonte']} — modo de mensagem exercitado: {mode}"
-        f" — envio: {result.get('envio') or ENVIO_SIMULADO}"
+        " — envio: Telegram (real, destino por telefone no banco de vínculos)"
     )
 
     if report.failures:
@@ -651,15 +638,8 @@ else:
             )
             with st.chat_message("assistant"):
                 st.markdown(message.text)
-            destino = (
-                phone
-                if send.channel == "sms"
-                else (
-                    holder.telegram_chat_id if holder is not None else "—"
-                )
-            )
             caption = (
-                f"Envio via {send.channel} para {destino} — status:"
+                f"Envio via {send.channel} (telefone {phone}) — status:"
                 f" {send.status}"
             )
             if send.detail:

@@ -1,9 +1,10 @@
-"""Testes do adapter Telegram Bot API — intent 004.
+"""Testes do adapter Telegram Bot API — intents 004/006.
 
 Contrato testado contra respostas gravadas (sem rede): sendMessage
-envia por chat_id (nunca por telefone), degradação skipped/failed sem
-quebrar a rodada, retry apenas para erro de rede e getUpdates
-parseando contatos para o linking telefone → chat_id.
+envia por chat_id resolvido NO REPOSITÓRIO de vínculos (nunca por
+telefone), degradação skipped/failed sem quebrar a rodada, retry apenas
+para erro de rede, teclado request_contact para quem não compartilhou
+o contato e getUpdates parseando contatos para o linking.
 """
 
 import json
@@ -15,6 +16,7 @@ from app.adapters.telegram_api import (
     TelegramApiError,
     TelegramSender,
     fetch_recent_contacts,
+    send_contact_request,
 )
 from app.domain.holders import InsuranceType, PolicyHolder
 from app.domain.messages import GeneratedMessage
@@ -24,14 +26,29 @@ from app.domain.weather import GeoLocation
 _OK = json.dumps({"ok": True, "result": {"message_id": 1}}).encode()
 
 
-def _holder(chat_id: str = "123456789") -> PolicyHolder:
+class _RepoFake:
+    """Fake do TelegramLinkRepository (mapa telefone → chat_id)."""
+
+    def __init__(self, mapping: dict[str, str] | None = None):
+        self._mapping = dict(mapping or {})
+
+    def get_chat_id_by_phone(self, phone_digits: str) -> str | None:
+        return self._mapping.get(phone_digits)
+
+    def upsert_link(
+        self, phone_digits: str, chat_id: str, first_name: str = ""
+    ) -> None:
+        self._mapping[phone_digits] = chat_id
+
+
+def _holder() -> PolicyHolder:
+    """Segurado SEM chat_id — o destino vem do repositório (intent 006)."""
     return PolicyHolder(
         id="H001",
         name="Maria Silva",
         phone="+5511987650001",
         location=GeoLocation(latitude=-23.55, longitude=-46.63),
         insurance_types=frozenset({InsuranceType.RESIDENTIAL}),
-        telegram_chat_id=chat_id,
     )
 
 
@@ -43,9 +60,10 @@ def _message() -> GeneratedMessage:
     )
 
 
-def test_send_entrega_por_chat_id_e_retorna_sent():
-    """Given token + chat_id vinculado, when send, then POST sendMessage
-    com chat_id numérico e NotificationRecord 'sent'."""
+def test_send_entrega_por_chat_id_do_repo_e_retorna_sent():
+    """Given token + vínculo no repo (telefone → chat_id), when send,
+    then POST sendMessage com chat_id numérico e NotificationRecord
+    'sent' — o holder NÃO carrega chat_id."""
     captured: dict = {}
 
     def post(url: str, payload: dict, timeout_s: float) -> bytes:
@@ -53,7 +71,10 @@ def test_send_entrega_por_chat_id_e_retorna_sent():
         captured["payload"] = payload
         return _OK
 
-    record = TelegramSender("T0K3N", post=post).send(_holder(), _message())
+    repo = _RepoFake({"5511987650001": "123456789"})
+    record = TelegramSender("T0K3N", links=repo, post=post).send(
+        _holder(), _message()
+    )
 
     assert captured["url"] == "https://api.telegram.org/botT0K3N/sendMessage"
     assert captured["payload"] == {
@@ -73,39 +94,66 @@ def test_send_sem_token_e_skipped_sem_rede():
     def post(url: str, payload: dict, timeout_s: float) -> bytes:
         raise AssertionError("não deveria chamar a API sem token")
 
-    record = TelegramSender("", post=post).send(_holder(), _message())
+    record = TelegramSender("", links=_RepoFake(), post=post).send(
+        _holder(), _message()
+    )
 
     assert record.status == "skipped"
     assert "token" in record.detail
 
 
-def test_send_sem_chat_id_e_skipped_sem_rede():
-    """Given segurado sem chat_id, when send, then 'skipped' — o
-    Telegram NÃO entrega por número de telefone."""
+def test_send_sem_vinculo_no_repo_e_skipped_sem_rede():
+    """Given telefone sem vínculo no repositório, when send, then
+    'skipped' — o Telegram NÃO entrega por número de telefone."""
 
     def post(url: str, payload: dict, timeout_s: float) -> bytes:
-        raise AssertionError("não deveria chamar a API sem chat_id")
+        raise AssertionError("não deveria chamar a API sem vínculo")
 
-    record = TelegramSender("T0K3N", post=post).send(_holder(""), _message())
+    record = TelegramSender("T0K3N", links=_RepoFake(), post=post).send(
+        _holder(), _message()
+    )
 
     assert record.status == "skipped"
-    assert "chat_id" in record.detail
+    assert "vínculo" in record.detail
 
 
 def test_chat_id_negativo_de_grupo_vira_int():
-    """Given chat_id negativo (grupos/supergroups), when send, then
-    payload com chat_id inteiro negativo."""
+    """Given chat_id negativo (grupos/supergroups) no repo, when send,
+    then payload com chat_id inteiro negativo."""
     captured: dict = {}
 
     def post(url: str, payload: dict, timeout_s: float) -> bytes:
         captured["payload"] = payload
         return _OK
 
-    TelegramSender("T0K3N", post=post).send(
-        _holder("-100123456"), _message()
+    repo = _RepoFake({"5511987650001": "-100123456"})
+    TelegramSender("T0K3N", links=repo, post=post).send(
+        _holder(), _message()
     )
 
     assert captured["payload"]["chat_id"] == -100123456
+
+
+def test_telefone_formatado_casa_pelos_digitos():
+    """Given vínculo gravado por dígitos e holder com telefone formatado,
+    when send, then o match é normalizado (intent 006)."""
+    captured: dict = {}
+
+    def post(url: str, payload: dict, timeout_s: float) -> bytes:
+        captured["payload"] = payload
+        return _OK
+
+    repo = _RepoFake({"5511987650001": "999"})
+    holder = PolicyHolder(
+        id="H001",
+        name="Maria Silva",
+        phone="+55 (11) 98765-0001",  # formatação livre na bancada
+        location=GeoLocation(latitude=-23.55, longitude=-46.63),
+        insurance_types=frozenset({InsuranceType.RESIDENTIAL}),
+    )
+    TelegramSender("T0K3N", links=repo, post=post).send(holder, _message())
+
+    assert captured["payload"]["chat_id"] == 999
 
 
 def test_erro_http_400_e_failed_sem_retry():
@@ -117,7 +165,9 @@ def test_erro_http_400_e_failed_sem_retry():
         attempts.append(1)
         raise HTTPError(url, 400, "Bad Request", None, None)  # type: ignore[arg-type]
 
-    record = TelegramSender("T0K3N", post=post).send(_holder(), _message())
+    record = TelegramSender(
+        "T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
+    ).send(_holder(), _message())
 
     assert len(attempts) == 1
     assert record.status == "failed"
@@ -134,7 +184,9 @@ def test_ok_false_com_200_e_failed_sem_retry():
         attempts.append(1)
         return body
 
-    record = TelegramSender("T0K3N", post=post).send(_holder(), _message())
+    record = TelegramSender(
+        "T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
+    ).send(_holder(), _message())
 
     assert len(attempts) == 1
     assert record.status == "failed"
@@ -151,7 +203,11 @@ def test_falha_de_rede_tem_retry_e_failed():
         raise URLError("connection refused")
 
     record = TelegramSender(
-        "T0K3N", post=post, retries=2, retry_delay_s=0.0
+        "T0K3N",
+        links=_RepoFake({"5511987650001": "1"}),
+        post=post,
+        retries=2,
+        retry_delay_s=0.0,
     ).send(_holder(), _message())
 
     assert len(attempts) == 3
@@ -169,12 +225,42 @@ def test_rede_instavel_recupera_e_envia():
             raise URLError("transient")
         return _OK
 
-    record = TelegramSender("T0K3N", post=post, retry_delay_s=0.0).send(
-        _holder(), _message()
-    )
+    record = TelegramSender(
+        "T0K3N",
+        links=_RepoFake({"5511987650001": "1"}),
+        post=post,
+        retry_delay_s=0.0,
+    ).send(_holder(), _message())
 
     assert len(calls) == 2
     assert record.status == "sent"
+
+
+def test_send_contact_request_envia_teclado_request_contact():
+    """Given chat que só mandou /start, when send_contact_request, then
+    sendMessage com reply_markup keyboard request_contact (intent 006)."""
+    captured: dict = {}
+
+    def post(url: str, payload: dict, timeout_s: float) -> bytes:
+        captured["url"] = url
+        captured["payload"] = payload
+        return _OK
+
+    send_contact_request("T0K3N", "5704429924", post=post)
+
+    assert captured["url"].endswith("/sendMessage")
+    assert captured["payload"]["chat_id"] == 5704429924
+    keyboard = captured["payload"]["reply_markup"]["keyboard"]
+    assert keyboard[0][0]["request_contact"] is True
+    assert "contato" in captured["payload"]["text"]
+
+
+def test_send_contact_request_sem_token_levanta_erro():
+    def post(url: str, payload: dict, timeout_s: float) -> bytes:
+        raise AssertionError("não deveria chamar a API sem token")
+
+    with pytest.raises(TelegramApiError, match="token"):
+        send_contact_request("", "42", post=post)
 
 
 def _updates_fixture() -> bytes:

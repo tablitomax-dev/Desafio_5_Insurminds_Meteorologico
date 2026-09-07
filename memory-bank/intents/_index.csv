@@ -3,4 +3,5 @@ slug,name,status,created_at,last_touched_at,unit_count,story_count,active_bolt,o
 002-proactive-communication,Proactive Communication,done,2026-08-29,2026-09-04,6,7,,pablo,P0,"open-meteo,alerta proativo,segurados,eventos climaticos,risk rules,llm,i2a2"
 003-streamlit-ui,Streamlit Demo UI,done,2026-09-04,2026-09-06,0,0,,pablo,P1,"streamlit,demo visual,banca,composition root,apresentacao"
 004-telegram-delivery,Telegram Delivery,done,2026-09-06,2026-09-06,0,0,,pablo,P1,"telegram,bot api,chat_id,linking,envio real,notification sender,degradacao"
-005-risk-engine-v2,Risk Engine V2,in_progress,2026-09-06,2026-09-06,1,0,,pablo,P1,"risk engine,limiares,severidade,storm,rough sea,fog,heat,cold,multiple risks,umidade,humidity"
+005-risk-engine-v2,Risk Engine V2,done,2026-09-06,2026-09-06,1,0,,pablo,P1,"risk engine,limiares,severidade,storm,rough sea,fog,heat,cold,multiple risks,umidade,humidity"
+006-telegram-links-sql,Telegram Links SQL,in_progress,2026-09-06,2026-09-06,1,0,,pablo,P1,"sqlite,telegram links,chat_id,repository,request_contact,vinculacao,banco"

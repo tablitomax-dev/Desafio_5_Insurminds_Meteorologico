@@ -3,3 +3,9 @@
 # activos heredan este color (contraste AA con texto blanco).
 [theme]
 primaryColor = "#1a7f37"
+
+# Porta fixa da demo (intent 006): a 8501 ficou ocupada por uma
+# instância antiga; o padrão do projeto é http://localhost:8502.
+[server]
+port = 8502
+headless = true
