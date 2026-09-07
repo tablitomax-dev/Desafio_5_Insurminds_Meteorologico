@@ -45,3 +45,18 @@ class PolicyHolderRepository(Protocol):
     """Port: catálogo de segurados consultável pelo pipeline."""
 
     def list_all(self) -> list[PolicyHolder]: ...
+
+
+class TelegramLinkRepository(Protocol):
+    """Port: vínculo telefone ↔ chat_id do bot (intent 006).
+
+    A API do Telegram entrega por chat_id — o repositório persiste o
+    linking (nascido do /start + contato compartilhado) para que o
+    envio resolva o destino consultando-o, sem campo na UI.
+    """
+
+    def get_chat_id_by_phone(self, phone_digits: str) -> str | None: ...
+
+    def upsert_link(
+        self, phone_digits: str, chat_id: str, first_name: str = ""
+    ) -> None: ...

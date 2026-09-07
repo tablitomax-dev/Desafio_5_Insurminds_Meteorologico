@@ -1,8 +1,8 @@
 # Desafio 5 I2A2 — Ferramenta Inteligente para Comunicação Proativa com o Segurado
 
 > Monitoramento meteorológico público → detecção de risco por perfil de seguro →
-> mensagem preventiva personalizada (template ou LLM) → envio (simulado ou
-> Telegram real) + relatório.
+> mensagem preventiva personalizada (template ou LLM) → envio real via Telegram
+> (vínculo telefone → chat persistido em SQLite) + relatório.
 
 ## O problema
 
@@ -64,32 +64,44 @@ as mensagens preventivas com o **modo exercitado** sempre reportado
 (template, llm ou fallback) e o relatório textual idêntico ao da CLI
 num expander. Nenhuma regra de negócio na UI.
 
-### Envio real via Telegram
+### Envio real via Telegram (vínculos em SQLite)
 
-No seletor **Envio**, troque "Simulado (SMS)" por "Telegram (real)":
+Na UI o envio é **sempre Telegram real** (a CLI preserva o SMS simulado
+da story 07). O destino é resolvido por telefone no banco de vínculos
+`data/telegram_links.db` (SQLite via stdlib; FORA do Git — ADR-010):
 
 1. Crie o bot no [@BotFather](https://t.me/BotFather) (`/newbot`) e cole o
    token no campo secreto da sidebar (não é persistido; alternativa: env
    `TELEGRAM_BOT_TOKEN`).
-2. O segurado manda `/start` no bot e **compartilha o contato** — o
-   Telegram entrega por `chat_id`, nunca por número de telefone.
-3. Clique em **"Vincular contatos"**: o bot casa o telefone compartilhado
-   com o telefone da bancada e preenche a coluna **Chat ID**.
+2. O segurado manda `/start` no bot e **toca no botão "Compartilhar meu
+   contato"** — o Telegram entrega por `chat_id`, nunca por número de
+   telefone; o vínculo fica persistido no banco.
+3. Clique em **"Vincular contatos"**: grava no SQL quem compartilhou o
+   contato e envia o próprio botão do bot para quem só deu `/start`
+   (tocar nele e repetir o clique conclui o vínculo).
 4. "Disparar Alertas" entrega a mensagem real no chat vinculado
-   (status `sent`). Sem token ou chat_id o envio vira `skipped` com o
-   motivo — e a rodada segue intacta (degradação graciosa, ADR-008).
+   (status `sent`). Sem token ou sem vínculo o envio vira `skipped`
+   com o motivo — e a rodada segue intacta (degradação, ADR-008).
 
-## Regras de negócio (detecção de risco)
+## Regras de negócio (detecção de risco — V2)
 
 | Evento | Gatilho | Impactados | Severidade |
 |---|---|---|---|
-| Chuva intensa | precipitação ≥ 10 mm/h | seguros **residenciais** | medium |
-| Granizo | weathercode de granizo (WMO) | seguros **auto** | high |
-| Vento forte | vento ≥ 60 km/h | região **costeira** | medium |
+| Chuva intensa | precipitação ≥ 10 mm/h (≥ 20 high / ≥ 35 very_high) | segurados **residenciais** | medium → very_high |
+| Granizo | weathercode de granizo (WMO) | segurados **auto** | high |
+| Vento forte | vento ≥ 60 km/h (≥ 80 very_high) | região **costeira** | medium → very_high |
+| Calor / onda de calor | ≥ 35 °C / ≥ 38 °C | residencial ou auto | high / very_high |
+| Frio intenso | ≤ 10 °C (≤ 5 very_high) | residencial ou auto | high → very_high |
+| Neblina | umidade ≥ 95% + vento ≤ 15 km/h + chuva ≤ 10 mm/h | auto | medium → high |
+| Tempestade | chuva ≥ 30 + vento ≥ 60 km/h (35/80 very_high) | residencial ou auto | high → very_high |
+| Ressaca | litoral + vento ≥ 80 km/h + chuva ≥ 30 mm/h | residencial (litoral) | very_high |
+| Múltiplos riscos | ≥ 2 riscos simultâneos | idem aos componentes | severidade máxima |
 
 Cada mensagem traz nome do segurado, evento, severidade e **≥ 2 recomendações
-preventivas específicas** do tipo de evento (drenagem/cobertura do veículo/
-reforço de estruturas), limitada a 480 caracteres.
+preventivas específicas** do tipo de evento, limitada a 480 caracteres. As
+regras são **escopadas por ramo com exposição material** (classificação
+pessoal/residencial/auto — ADR-009); a neblina pula a avaliação quando o
+Open-Meteo não traz umidade (`humidity_pct` opcional no snapshot).
 
 ## Arquitetura (Ports & Adapters / DDD modular)
 
@@ -103,11 +115,12 @@ fixtures ────► adapters/fixtures ────┴─► pipeline.py ─
 
 - **Domain puro e sem I/O** (`app/domain/`): regras de risco declarativas,
   ports (`WeatherProvider`, `PolicyHolderRepository`, `MessageGenerator`,
-  `NotificationSender`) e entidades.
+  `NotificationSender`, `TelegramLinkRepository`) e entidades.
 - **Adapters** (`app/adapters/`): Open-Meteo e BrasilAPI (geocoding de
-  CEP) e Telegram (envio real) — todos stdlib-only —, catálogo in-memory
-  com seeds JSON, fixtures para demo offline e `LlmGenerator` (import
-  lazy de Pydantic AI — o modo template nunca exige o SDK).
+  CEP), Telegram (envio real + vínculos em SQLite) — todos stdlib-only
+  —, catálogo in-memory com seeds JSON, fixtures para demo offline e
+  `LlmGenerator` (import lazy de Pydantic AI — o modo template nunca
+  exige o SDK).
 - **Pipeline** recebe ports prontas; a **CLI** é o composition root
   (`LLM_MODEL`/`LLM_PROVIDER` selecionam a implementação da mensagem).
 

@@ -1,15 +1,19 @@
-"""Adapter Telegram Bot API — envio real dos alertas (intent 004).
+"""Adapter Telegram Bot API — envio real dos alertas (intents 004/006).
 
 Implementa a port `NotificationSender` (app.domain.notify). A API do
 Telegram entrega mensagens por `chat_id` — NUNCA por número de
-telefone — e somente para conversas já iniciadas com o bot. O linking
+telefone — e somente para conversas já iniciadas com o bot. O vínculo
 telefone → chat_id nasce quando o segurado manda /start no bot e
-compartilha o contato: `fetch_recent_contacts` lê `getUpdates` e a UI
-casa o `phone_number` com o telefone da bancada.
+compartilha o contato (`fetch_recent_contacts` lê `getUpdates`) e é
+PERSISTIDO no repositório `TelegramLinkRepository` (SQLite — intent
+006): no envio, o chat_id é resolvido por telefone no banco, sem campo
+na UI. Para chats que só mandaram /start, `send_contact_request` envia
+o teclado "Compartilhar meu contato" (`request_contact`) — tocar no
+botão gera o update com telefone e o próximo linking grava o vínculo.
 
 Degradação graciosa (ADR-008): falha de entrega NUNCA quebra a rodada —
 cada `send` vira um `NotificationRecord` com status "sent", "failed"
-(erro da API/rede) ou "skipped" (sem token / segurado sem chat_id), e o
+(erro da API/rede) ou "skipped" (sem token / telefone sem vínculo), e o
 motivo vai em `detail` para o relatório. Token via env
 TELEGRAM_BOT_TOKEN ou campo secreto da UI; NUNCA no repositório.
 Mesma disciplina da BrasilAPI: User-Agent próprio, timeout, retry
@@ -30,6 +34,7 @@ from typing import Any, Protocol
 from app.domain.holders import PolicyHolder
 from app.domain.messages import GeneratedMessage
 from app.domain.notify import NotificationRecord
+from app.domain.ports import TelegramLinkRepository
 
 API_BASE = "https://api.telegram.org/bot"
 _USER_AGENT = "insurminds-meteorologico-demo/1.0 (desafio I2A2)"
@@ -141,11 +146,13 @@ class _TelegramClient:
 
 
 class TelegramSender:
-    """Envio real via Telegram (port NotificationSender — intent 004).
+    """Envio real via Telegram (port NotificationSender — intents 004/006).
 
     - sem token: todo envio vira "skipped" (nenhuma chamada de rede);
-    - segurado sem telegram_chat_id: "skipped" — Telegram não entrega
-      por telefone; o segurado precisa iniciar a conversa com o bot;
+    - telefone sem vínculo no repositório: "skipped" — Telegram não
+      entrega por telefone; o vínculo nasce do /start + contato
+      compartilhado (ou do teclado `send_contact_request`) e fica
+      gravado no `TelegramLinkRepository`;
     - erro de API/rede: "failed" com o motivo em `detail`.
     """
 
@@ -153,11 +160,13 @@ class TelegramSender:
         self,
         token: str = "",
         *,
+        links: TelegramLinkRepository,
         post: _HttpPostFn | None = None,
         retries: int = _DEFAULT_RETRIES,
         retry_delay_s: float = _RETRY_DELAY_S,
     ) -> None:
         self.token = (token or "").strip()
+        self._links = links
         self._client = _TelegramClient(
             self.token, post=post, retries=retries, retry_delay_s=retry_delay_s
         )
@@ -174,7 +183,8 @@ class TelegramSender:
                 status="skipped",
                 detail="token do bot ausente (TELEGRAM_BOT_TOKEN)",
             )
-        chat_id = (holder.telegram_chat_id or "").strip()
+        phone_digits = "".join(ch for ch in holder.phone if ch.isdigit())
+        chat_id = self._links.get_chat_id_by_phone(phone_digits) or ""
         if not chat_id:
             return NotificationRecord(
                 holder_id=holder.id,
@@ -182,8 +192,8 @@ class TelegramSender:
                 message=message.text,
                 sent_at=datetime.now(UTC),
                 status="skipped",
-                detail="chat_id não vinculado — segurado precisa mandar"
-                " /start no bot e compartilhar o contato",
+                detail="telefone sem vínculo no bot — segurado precisa"
+                " mandar /start e compartilhar o contato",
             )
         try:
             self._client.call(
@@ -206,6 +216,53 @@ class TelegramSender:
             sent_at=datetime.now(UTC),
             status="sent",
         )
+
+
+def send_contact_request(
+    token: str,
+    chat_id: str,
+    *,
+    post: _HttpPostFn | None = None,
+    retries: int = _DEFAULT_RETRIES,
+    retry_delay_s: float = _RETRY_DELAY_S,
+) -> None:
+    """Envia o teclado "Compartilhar meu contato" (`request_contact`).
+
+    Para chats que deram /start SEM compartilhar o telefone (intent
+    006): tocar no botão gera um update com `contact` — o próximo
+    "Vincular contatos" grava o vínculo no repositório. Erros de API
+    propagam como `TelegramApiError` (chamador decide a degradação).
+    """
+    client = _TelegramClient(
+        (token or "").strip(),
+        post=post,
+        retries=retries,
+        retry_delay_s=retry_delay_s,
+    )
+    if not client.token:
+        raise TelegramApiError("sendMessage: token do bot ausente")
+    client.call(
+        "sendMessage",
+        {
+            "chat_id": _parse_chat_id(chat_id),
+            "text": (
+                "Toque no botão abaixo para compartilhar seu contato e"
+                " receber os alertas meteorológicos."
+            ),
+            "reply_markup": {
+                "keyboard": [
+                    [
+                        {
+                            "text": "📱 Compartilhar meu contato",
+                            "request_contact": True,
+                        }
+                    ]
+                ],
+                "resize_keyboard": True,
+                "one_time_keyboard": True,
+            },
+        },
+    )
 
 
 def fetch_recent_contacts(

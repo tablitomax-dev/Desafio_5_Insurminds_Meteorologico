@@ -15,6 +15,9 @@ tools/ai-dlc/runs/pre-merge-quality-repair/
 *.log
 .graph-last-updates.log
 
+# Banco de vínculos Telegram (dados pessoais — intent 006, ADR-010)
+data/*.db
+
 # Artefatos locais / ferramentas (contratos em .trae/ SÃO versionados:
 # canônicos ficam na raiz — AGENTS.md, CONTRIBUTING.md; pontes ficam aqui)
 .claude/

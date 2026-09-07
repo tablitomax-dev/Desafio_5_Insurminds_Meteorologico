@@ -230,7 +230,22 @@ def test_build_generator_provider_explicito(monkeypatch):
     assert default.model == DEFAULT_MODEL
 
 
-# --- intent 004: canal de envio (simulado / Telegram real) ---
+# --- intents 004/006: canal de envio (simulado / Telegram + repo SQL) ---
+
+
+class _LinksFake:
+    """Fake do TelegramLinkRepository (mapa telefone → chat_id)."""
+
+    def __init__(self, mapping: dict[str, str] | None = None):
+        self._mapping = dict(mapping or {})
+
+    def get_chat_id_by_phone(self, phone_digits: str) -> str | None:
+        return self._mapping.get(phone_digits)
+
+    def upsert_link(
+        self, phone_digits: str, chat_id: str, first_name: str = ""
+    ) -> None:
+        self._mapping[phone_digits] = chat_id
 
 
 def test_build_sender_escolhe_o_canal(monkeypatch):
@@ -246,24 +261,31 @@ def test_build_sender_escolhe_o_canal(monkeypatch):
     from app.domain.notify import SimulatedSender
 
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    links = _LinksFake()
     assert isinstance(build_sender(), SimulatedSender)
     assert isinstance(
         build_sender(delivery=DELIVERY_SIMULATED), SimulatedSender
     )
     assert isinstance(
-        build_sender(delivery=DELIVERY_TELEGRAM, telegram_token="tok"),
+        build_sender(
+            delivery=DELIVERY_TELEGRAM,
+            telegram_token="tok",
+            link_repository=links,
+        ),
         TelegramSender,
     )
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "env-token")
-    sender = build_sender(delivery=DELIVERY_TELEGRAM)
+    sender = build_sender(
+        delivery=DELIVERY_TELEGRAM, link_repository=links
+    )
     assert isinstance(sender, TelegramSender)
     assert sender.token == "env-token"
 
 
 def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
-    """Given delivery telegram + chat_id vinculado (bancada/seeds), when
-    rodada, then NotificationRecord 'sent' com POST na Bot API por
-    chat_id — a falha de rede é a única diferença para o simulated."""
+    """Given delivery telegram + vínculo no repositório, when rodada,
+    then NotificationRecord 'sent' com POST na Bot API por chat_id — o
+    destino é resolvido por TELEFONE no repo (intent 006)."""
     from app.adapters import telegram_api
     from app.composition import DELIVERY_TELEGRAM, run_proactive_round
     from app.domain.holders import InsuranceType, PolicyHolder
@@ -286,8 +308,8 @@ def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
         phone="+5511999990001",
         location=GeoLocation(latitude=-23.55, longitude=-46.63),
         insurance_types=frozenset({InsuranceType.AUTO}),
-        telegram_chat_id="123456789",
     )
+    links = _LinksFake({"5511999990001": "123456789"})
 
     report, _mode = run_proactive_round(
         offline=True,
@@ -295,6 +317,7 @@ def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
         holders=[holder],
         delivery=DELIVERY_TELEGRAM,
         telegram_token="T0K3N",
+        link_repository=links,
     )
 
     assert report.sends[0].status == "sent"
@@ -302,9 +325,10 @@ def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
     assert captured["payload"]["chat_id"] == 123456789
 
 
-def test_rodada_telegram_sem_chat_id_e_skipped(tmp_path, monkeypatch):
-    """Given delivery telegram e segurado sem chat_id, when rodada, then
-    'skipped' SEM rede — degradação graciosa, a rodada segue."""
+def test_rodada_telegram_sem_vinculo_e_skipped(tmp_path, monkeypatch):
+    """Given delivery telegram e telefone sem vínculo no repo, when
+    rodada, then 'skipped' SEM rede — degradação graciosa, a rodada
+    segue."""
     from app.adapters import telegram_api
     from app.composition import DELIVERY_TELEGRAM, run_proactive_round
 
@@ -312,7 +336,7 @@ def test_rodada_telegram_sem_chat_id_e_skipped(tmp_path, monkeypatch):
     data = _write_data_dir(tmp_path)
 
     def nao_chamar(url: str, payload: dict, timeout_s: float) -> bytes:
-        raise AssertionError("sem chat_id não deveria chamar a API")
+        raise AssertionError("sem vínculo não deveria chamar a API")
 
     monkeypatch.setattr(telegram_api, "_http_post_json", nao_chamar)
 
@@ -321,7 +345,8 @@ def test_rodada_telegram_sem_chat_id_e_skipped(tmp_path, monkeypatch):
         data_dir=data,
         delivery=DELIVERY_TELEGRAM,
         telegram_token="T0K3N",
+        link_repository=_LinksFake(),
     )
 
     assert report.sends[0].status == "skipped"
-    assert "chat_id" in report.sends[0].detail
+    assert "vínculo" in report.sends[0].detail

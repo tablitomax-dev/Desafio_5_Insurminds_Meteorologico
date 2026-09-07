@@ -10,9 +10,11 @@ A bancada da UI (intent 003) também pode injetar `holders` editados
 (nome/telefone/coordenadas/perfil) e `weather_snapshots` simulados —
 o alerta continua sendo gerado pelas MESMAS regras do domínio
 analisando o tempo informado; nada de regra nova aqui. O CANAL de
-envio também é escolha explícita (intent 004): `SimulatedSender` (SMS
-fake) ou `TelegramSender` real (Telegram Bot API) via `build_sender` —
-com degradação graciosa, a falha de entrega nunca quebra a rodada.
+envio também é escolha explícita (intents 004/006): `SimulatedSender`
+(SMS fake) ou `TelegramSender` real (Telegram Bot API) via
+`build_sender` — com o destino (chat_id) resolvido por telefone no
+`TelegramLinkRepository` (SQLite, ADR-010). Com degradação graciosa, a
+falha de entrega nunca quebra a rodada.
 """
 
 from __future__ import annotations
@@ -28,9 +30,10 @@ from app.adapters.fixtures import FixtureWeatherProvider
 from app.adapters.llm_messages import build_generator, describe_mode
 from app.adapters.open_meteo import OpenMeteoProvider
 from app.adapters.telegram_api import TelegramSender
+from app.adapters.telegram_links_sqlite import SqliteTelegramLinkRepository
 from app.domain.holders import PolicyHolder
 from app.domain.notify import NotificationSender, SimulatedSender
-from app.domain.ports import WeatherProvider
+from app.domain.ports import TelegramLinkRepository, WeatherProvider
 from app.domain.risk import RiskEngine
 from app.pipeline import RoundReport, run_round
 
@@ -63,15 +66,17 @@ def build_sender(
     *,
     delivery: str = DELIVERY_SIMULATED,
     telegram_token: str | None = None,
+    link_repository: TelegramLinkRepository | None = None,
 ) -> NotificationSender:
-    """Canal de envio da rodada — intent 004.
+    """Canal de envio da rodada — intents 004/006.
 
-    "simulated": SimulatedSender (SMS fake — comportamento original).
+    "simulated": SimulatedSender (SMS fake — CLI/story 07).
     "telegram": TelegramSender real (Telegram Bot API). O token vem do
     parâmetro explícito (campo secreto da UI) ou, em último caso, de
-    TELEGRAM_BOT_TOKEN (mesmo contrato do gerador LLM). Sem token ou
-    chat_id o envio vira "skipped" — degradação, nunca quebra a rodada
-    (ADR-008).
+    TELEGRAM_BOT_TOKEN (mesmo contrato do gerador LLM). O destino
+    (chat_id) é resolvido pelo `TelegramLinkRepository` (SQLite em
+    `data/telegram_links.db` por default — ADR-010). Sem token ou sem
+    vínculo o envio vira "skipped" — degradação, nunca quebra a rodada.
     """
     if delivery == DELIVERY_TELEGRAM:
         token = (
@@ -79,7 +84,12 @@ def build_sender(
             if telegram_token is not None
             else os.environ.get("TELEGRAM_BOT_TOKEN", "")
         )
-        return TelegramSender(token)
+        links = (
+            link_repository
+            if link_repository is not None
+            else SqliteTelegramLinkRepository()
+        )
+        return TelegramSender(token, links=links)
     return SimulatedSender()
 
 
@@ -93,14 +103,16 @@ def run_proactive_round(
     weather_snapshots: dict[str, dict[str, float]] | None = None,
     delivery: str = DELIVERY_SIMULATED,
     telegram_token: str | None = None,
+    link_repository: TelegramLinkRepository | None = None,
 ) -> tuple[RoundReport, str]:
     """Executa a rodada completa; retorna (relatório, modo exercitado).
 
     `llm_model`/`llm_provider` explícitos (botões da UI) vencem; `None`
     cai no env — contrato da story 06 preservado para a CLI. `holders`
     e `weather_snapshots` injetados (bancada da UI) vencem os seeds.
-    `delivery` escolhe o canal de envio (simulated/telegram — intent
-    004); `telegram_token` explícito vence o env TELEGRAM_BOT_TOKEN.
+    `delivery` escolhe o canal de envio (simulated/telegram); o destino
+    Telegram é resolvido no `link_repository` (SQLite — intent 006);
+    `telegram_token` explícito vence o env TELEGRAM_BOT_TOKEN.
     """
     repository = InMemoryPolicyHolderRepository(
         holders
@@ -117,6 +129,10 @@ def run_proactive_round(
         ),
         engine=RiskEngine(),
         generator=generator,
-        sender=build_sender(delivery=delivery, telegram_token=telegram_token),
+        sender=build_sender(
+            delivery=delivery,
+            telegram_token=telegram_token,
+            link_repository=link_repository,
+        ),
     )
     return report, describe_mode(generator)
