@@ -121,3 +121,102 @@ class TestTemplateGenerator:
 
     def test_constante_de_limite_de_acordo_com_story(self):
         assert MAX_MESSAGE_CHARS == 480
+
+
+class TestTemplateGeneratorConsolidated:
+    """Mensagem consolidada (intent 007): ≥2 riscos → UMA mensagem."""
+
+    @staticmethod
+    def _alert(kind, severity, reason="motivo"):
+        from app.domain.risk import RiskAlert
+
+        return RiskAlert(
+            kind=kind, severity=severity, reason=reason, holder_id="h-001"
+        )
+
+    def test_dois_riscos_geram_uma_mensagem_com_os_dois_eventos(self, generator):
+        """Granizo + onda de calor → texto cita os 2 eventos e ao menos
+        uma recomendação específica de cada, dentro do limite da story."""
+        from app.domain.risk import Severity
+
+        hail = self._alert(RiskKind.HAIL, Severity.HIGH)
+        wave = self._alert(RiskKind.HEAT_WAVE, Severity.VERY_HIGH)
+
+        msg = generator.generate_consolidated(make_holder("Pablo"), [hail, wave])
+
+        assert msg.holder_id == "h-001"
+        assert msg.alert_kind is RiskKind.MULTIPLE_RISKS
+        assert "Pablo" in msg.text
+        assert "granizo" in msg.text.lower()
+        assert "onda de calor" in msg.text.lower()
+        assert "estacionamento coberto" in msg.text.lower()  # rec do granizo
+        assert "hidrata" in msg.text.lower()  # rec da onda de calor
+        assert len(msg.text) <= MAX_MESSAGE_CHARS
+
+    def test_evento_mais_severo_vem_primeiro(self, generator):
+        """VERY_HIGH antes de HIGH no texto consolidado."""
+        from app.domain.risk import Severity
+
+        hail = self._alert(RiskKind.HAIL, Severity.HIGH)
+        wave = self._alert(RiskKind.HEAT_WAVE, Severity.VERY_HIGH)
+
+        msg = generator.generate_consolidated(make_holder(), [hail, wave])
+
+        texto = msg.text.lower()
+        assert texto.index("onda de calor") < texto.index("granizo")
+
+    def test_resumo_multiple_risks_nao_duplica_no_texto(self, generator):
+        """O alerta-resumo MULTIPLE_RISKS não entra na lista de eventos
+        (recomendações genéricas viriam duplicadas) — define só o kind."""
+        from app.domain.risk import Severity
+
+        hail = self._alert(RiskKind.HAIL, Severity.HIGH)
+        resumo = self._alert(RiskKind.MULTIPLE_RISKS, Severity.HIGH)
+
+        msg = generator.generate_consolidated(make_holder(), [hail, resumo])
+
+        assert msg.text.lower().count("granizo") == 1
+        assert "alertas simultâneos" in msg.text
+
+    def test_tres_riscos_citam_os_tres_e_cabem_no_limite(self, generator):
+        from app.domain.risk import Severity
+
+        alerts = [
+            self._alert(RiskKind.HEAVY_RAIN, Severity.MEDIUM),
+            self._alert(RiskKind.HAIL, Severity.HIGH),
+            self._alert(RiskKind.HEAT_WAVE, Severity.VERY_HIGH),
+        ]
+
+        msg = generator.generate_consolidated(make_holder(), alerts)
+
+        texto = msg.text.lower()
+        assert "chuva intensa" in texto
+        assert "granizo" in texto
+        assert "onda de calor" in texto
+        assert len(msg.text) <= MAX_MESSAGE_CHARS
+
+    def test_recomendacoes_repetidas_entre_eventos_sao_dedupadas(self, generator):
+        """Chuva intensa e tempestade compartilham a recomendação de
+        raios — no consolidado ela aparece uma única vez."""
+        from app.domain.risk import Severity
+
+        rain = self._alert(RiskKind.HEAVY_RAIN, Severity.MEDIUM)
+        storm = self._alert(RiskKind.STORM, Severity.HIGH)
+
+        msg = generator.generate_consolidated(make_holder(), [rain, storm])
+
+        assert (
+            msg.text.lower().count("desligue aparelhos eletrônicos") == 1
+        )
+
+    def test_um_risco_so_nao_deveria_usar_consolidado(self, generator):
+        """Com 1 alerta a port individual é a correta — mas o consolidado
+        também funciona (documento de comportamento defensável)."""
+        from app.domain.risk import Severity
+
+        hail = self._alert(RiskKind.HAIL, Severity.HIGH)
+
+        msg = generator.generate_consolidated(make_holder(), [hail])
+
+        assert msg.alert_kind is RiskKind.MULTIPLE_RISKS
+        assert "granizo" in msg.text.lower()

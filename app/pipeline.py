@@ -69,11 +69,19 @@ def run_round(
             continue
         consulted += 1
         snapshots.append((holder.id, snapshot))
-        for alert in engine.evaluate(snapshot, holder):
-            alerts.append(alert)
-            message = generator.generate(holder, alert)
-            messages.append(message)
-            sends.append(sender.send(holder, message))
+        holder_alerts = engine.evaluate(snapshot, holder)
+        if not holder_alerts:
+            continue
+        alerts.extend(holder_alerts)
+        # intent 007: UMA mensagem/envio por segurado — individual com 1
+        # risco; com ≥2, consolidada com todos os eventos e precauções
+        # (o relatório segue mostrando cada alerta individualmente).
+        if len(holder_alerts) == 1:
+            message = generator.generate(holder, holder_alerts[0])
+        else:
+            message = generator.generate_consolidated(holder, holder_alerts)
+        messages.append(message)
+        sends.append(sender.send(holder, message))
 
     return RoundReport(
         holders_consulted=consulted,

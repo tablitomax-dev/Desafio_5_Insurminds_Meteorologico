@@ -138,3 +138,50 @@ def test_holder_sem_eventos_nao_gera_mensagem_nem_envio():
     assert report.messages == ()
     assert report.sends == ()
     assert report.holders_consulted == 1
+
+
+def test_dois_riscos_mesmo_segurado_geram_uma_mensagem_consolidada():
+    """Intent 007: granizo (auto) + chuva intensa (residencial) para o
+    MESMO segurado → 3 alertas no relatório (2 individuais + resumo),
+    mas UMA mensagem/envio consolidada com os dois eventos."""
+    repository = _MapRepository(
+        [
+            _holder(
+                "H001",
+                "Maria Silva",
+                {InsuranceType.RESIDENTIAL, InsuranceType.AUTO},
+            )
+        ]
+    )
+    provider = FixtureWeatherProvider(
+        snapshots={
+            "-23.55|-46.63": {
+                "weathercode": 96,  # granizo (auto)
+                "precipitation_mm_h": 12.0,  # chuva intensa (residencial)
+                "wind_kmh": 10.0,
+                "temperature_c": 22.0,
+            }
+        }
+    )
+
+    report = run_round(
+        repository=repository,
+        provider=provider,
+        engine=RiskEngine(),
+        generator=TemplateGenerator(),
+        sender=SimulatedSender(),
+    )
+
+    assert {a.kind for a in report.alerts} == {
+        RiskKind.HEAVY_RAIN,
+        RiskKind.HAIL,
+        RiskKind.MULTIPLE_RISKS,
+    }
+    assert len(report.messages) == 1
+    assert len(report.sends) == 1
+    message = report.messages[0]
+    assert message.alert_kind is RiskKind.MULTIPLE_RISKS
+    texto = message.text.lower()
+    assert "chuva intensa" in texto
+    assert "granizo" in texto
+    assert report.sends[0].holder_id == "H001"
