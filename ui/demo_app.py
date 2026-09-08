@@ -623,9 +623,12 @@ else:
         st.dataframe(rows, hide_index=True)
 
     st.subheader("Mensagens preventivas")
-    for alert, message, send in zip(
-        report.alerts, report.messages, report.sends, strict=True
-    ):
+    # intent 007: 1 mensagem/envio por segurado (≥2 riscos → consolidada).
+    # A severidade do card vem do alerta correspondente no relatório
+    # (individual ou resumo MULTIPLE_RISKS, que tem a severidade máxima).
+    alert_by_key = {(a.holder_id, a.kind): a for a in report.alerts}
+    for message, send in zip(report.messages, report.sends, strict=True):
+        alert = alert_by_key[(message.holder_id, message.alert_kind)]
         holder = holders.get(message.holder_id)
         name = holder.name if holder is not None else message.holder_id
         phone = holder.phone if holder is not None else "—"

@@ -73,6 +73,15 @@ def _hail_alert() -> RiskAlert:
     )
 
 
+def _heat_wave_alert() -> RiskAlert:
+    return RiskAlert(
+        kind=RiskKind.HEAT_WAVE,
+        severity=Severity.VERY_HIGH,
+        reason="temperatura de 50.0 °C (limiar de onda de calor: 38 °C)",
+        holder_id="H001",
+    )
+
+
 def test_default_model_e_glm_53_flash_via_openrouter() -> None:
     """Binding definido pelo dono do repo: mesmo modelo do ai-dlc."""
     assert DEFAULT_MODEL == "openrouter:z-ai/glm-5.3-flash"
@@ -234,6 +243,60 @@ def test_lazy_agent_sem_sdk_delega_para_fallback(
     assert gen.fallbacks == 1
     assert gen.llm_calls == 0
     assert msg == TemplateGenerator().generate(_holder(), _hail_alert())
+
+
+# --- intent 007: mensagem consolidada (≥2 riscos → UM aviso) ---
+
+
+class TestLlmGeneratorConsolidated:
+    def test_consolidado_llm_com_todos_os_eventos_no_prompt(self) -> None:
+        """Given 2 alertas, when generate_consolidated, then prompt lista
+        os 2 eventos + recomendações de cada um e a saída sai do LLM."""
+        agent = _FakeAgent("Ola Maria! Granizo e onda de calor. Proteja-se.")
+        gen = LlmGenerator(agent=agent)
+
+        msg = gen.generate_consolidated(
+            _holder(), [_hail_alert(), _heat_wave_alert()]
+        )
+
+        assert msg.holder_id == "H001"
+        assert msg.alert_kind is RiskKind.MULTIPLE_RISKS
+        assert msg.text == "Ola Maria! Granizo e onda de calor. Proteja-se."
+        assert gen.llm_calls == 1
+        assert gen.fallbacks == 0
+        prompt = agent.prompts[0]
+        assert "Maria Silva" in prompt
+        assert "granizo" in prompt.lower()
+        assert "onda de calor" in prompt.lower()
+        assert "estacionamento coberto" in prompt  # rec do granizo
+        assert "hidrata" in prompt.lower()  # rec da onda de calor
+
+    def test_consolidado_fallback_silencioso_para_template(self) -> None:
+        """Given erro de LLM, when generate_consolidated, then fallback
+        para o template consolidado (mesma mensagem do Template)."""
+        agent = _FakeAgent(error=RuntimeError("503 upstream"))
+        gen = LlmGenerator(agent=agent, retry_delay_s=0.0)
+        alerts = [_hail_alert(), _heat_wave_alert()]
+
+        msg = gen.generate_consolidated(_holder(), alerts)
+
+        esperado = TemplateGenerator().generate_consolidated(
+            _holder(), alerts
+        )
+        assert msg == esperado
+        assert gen.fallbacks == 1
+        assert gen.llm_calls == 0
+
+    def test_consolidado_saida_longa_truncada_para_480(self) -> None:
+        agent = _FakeAgent("x" * 600)
+        gen = LlmGenerator(agent=agent)
+
+        msg = gen.generate_consolidated(
+            _holder(), [_hail_alert(), _heat_wave_alert()]
+        )
+
+        assert len(msg.text) == MAX_MESSAGE_CHARS
+        assert msg.text.endswith("…")
 
 
 def test_factory_padrao_e_template(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,7 +1,7 @@
 # Intent 006 — telegram-links-sql
 
-> Status: `in_progress` (mudança isolada de 1 PR em execução) | Owner: pablo |
-> Priority: P1 | Criado: 2026-09-06
+> Status: `done` (mudança isolada de 1 PR — mergeada no PR #16) | Owner:
+> pablo | Priority: P1 | Criado: 2026-09-06
 >
 > Contexto: a intent 004 entregou o envio real via Telegram, com o
 > chat_id lido do campo `telegram_chat_id` do segurado (bancada da UI).
@@ -57,8 +57,13 @@ chat_id na UI.
 
 ## Critérios de aceite
 
-1. [ ] "Vincular contatos" grava phone→chat_id em `data/telegram_links.db` (fora do Git) para quem compartilhou o contato
-2. [ ] Chat que deu /start sem contato recebe o teclado "Compartilhar meu contato"; ao tocar, o próximo clique o vincula
-3. [ ] "Disparar Alertas" entrega a mensagem real consultando o banco (sem coluna chat_id na UI); sem vínculo → `skipped` com motivo, rodada intacta
-4. [ ] UI não tem seletor SMS nem coluna "Chat ID Telegram"; CLI preserva o SMS simulado da story 07
-5. [ ] `telegram_chat_id` não existe mais no domínio/seeds; `ruff`/`mypy app`/`pytest` verdes; token e DB nunca no repositório
+1. [x] "Vincular contatos" grava phone→chat_id em `data/telegram_links.db` (fora do Git) para quem compartilhou o contato
+2. [x] Chat que deu /start sem contato recebe o teclado "Compartilhar meu contato"; ao tocar, o próximo clique o vincula
+3. [x] "Disparar Alertas" entrega a mensagem real consultando o banco (sem coluna chat_id na UI); sem vínculo → `skipped` com motivo, rodada intacta
+4. [x] UI não tem seletor SMS nem coluna "Chat ID Telegram"; CLI preserva o SMS simulado da story 07
+5. [x] `telegram_chat_id` não existe mais no domínio/seeds; `ruff`/`mypy app`/`pytest` verdes; token e DB nunca no repositório
+
+Validação real (dono, 2026-09-06): teclado do bot recebido, contato
+compartilhado, vínculo gravado no SQL e alertas entregues no Telegram
+(3 envios reais recebidos). Observação pós-teste → intent 007
+(consolidação em 1 mensagem por segurado).
