@@ -4,6 +4,7 @@ import pytest
 
 from app.adapters.llm_messages import (
     DEFAULT_MODEL,
+    LLM_TIMEOUT_S,
     LlmGenerator,
     build_generator,
     describe_mode,
@@ -127,9 +128,9 @@ def test_fallback_quando_resposta_vazia() -> None:
     assert gen.fallbacks == 1
 
 
-def test_saida_longa_truncada_para_480() -> None:
-    """Given LLM excede o limite, when gera, then truncado a 480 chars."""
-    agent = _FakeAgent("x" * 600)
+def test_saida_longa_truncada_para_limite() -> None:
+    """Given LLM excede o limite, when gera, then truncado a 600 chars."""
+    agent = _FakeAgent("x" * 700)
     gen = LlmGenerator(agent=agent)
 
     msg = gen.generate(_holder(), _hail_alert())
@@ -140,7 +141,7 @@ def test_saida_longa_truncada_para_480() -> None:
 
 def test_prompt_traz_contexto_e_regras_de_tom() -> None:
     """Given rodada, when gera, then prompt tem nome, seguro, evento,
-    recomendações e as regras de tom (claro/empático/acionável/480)."""
+    recomendações e as regras de tom (claro/empático/acionável/600)."""
     agent = _FakeAgent("ok")
     gen = LlmGenerator(agent=agent)
     gen.generate(_holder(), _hail_alert())
@@ -152,7 +153,14 @@ def test_prompt_traz_contexto_e_regras_de_tom() -> None:
     assert "empátic" in prompt.lower()
     assert "acionável" in prompt.lower()
     assert str(MAX_MESSAGE_CHARS) in prompt
-    assert "estacionamento coberto" in prompt  # recomendação específica
+    # Bateria (intent 008): célula do ramo contratado com impactos,
+    # fases e regras transversais (incl. proibição de pós-sinistro).
+    assert "local coberto" in prompt  # rec da célula Auto do granizo
+    assert "impacto possível" in prompt
+    assert "[Carro]" in prompt  # ramo contratado do segurado
+    assert "[Carro][Antes]" in prompt
+    assert "pós-sinistro" in prompt  # regra transversal 5
+    assert "199" in prompt  # hail HIGH → vermelho → telefones (regra 3)
 
 
 def test_mode_label_llm_quando_sem_fallback() -> None:
@@ -245,6 +253,48 @@ def test_lazy_agent_sem_sdk_delega_para_fallback(
     assert msg == TemplateGenerator().generate(_holder(), _hail_alert())
 
 
+def test_agente_openrouter_nasce_com_timeout_curto(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Revisão de desempenho (008): o agente OpenRouter real nasce com
+    timeout curto (LLM_TIMEOUT_S) — o default do SDK (600 s) pendurava a
+    rodada inteira quando a rede travava. EMENDA (2026-09-13): o timeout
+    tem de estar NO CONSTRUTOR do AsyncOpenAI — o SDK aplica o próprio
+    timeout por requisição e sobrescreve o do http_client."""
+    pydantic_ai = pytest.importorskip("pydantic_ai")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "123456:chave-de-teste")
+
+    agente = LlmGenerator()._create_agent()  # noqa: SLF001 (teste)
+
+    modelo = agente.model
+    assert isinstance(modelo, pydantic_ai.models.openai.OpenAIModel)
+    assert modelo.model_name == "z-ai/glm-5.3-flash"
+    # Timeout EFETIVO: o do AsyncOpenAI (aplicado por requisição).
+    cliente = modelo.provider.client  # noqa: SLF001 (SDK)
+    assert cliente.timeout == LLM_TIMEOUT_S
+    assert cliente.max_retries == 0
+    # O httpx client também carrega o teto (defesa em profundidade).
+    http_client = cliente._client  # noqa: SLF001 (SDK)
+    assert http_client.timeout.connect == LLM_TIMEOUT_S
+    assert http_client.timeout.read == LLM_TIMEOUT_S
+
+
+def test_sem_api_key_cai_no_fallback_sem_rede(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Given OPENROUTER_API_KEY ausente, when gera com agente real, then
+    o provider falha na criação e o fallback silencioso assume."""
+    pytest.importorskip("pydantic_ai")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    gen = LlmGenerator(retry_delay_s=0.0)
+    msg = gen.generate(_holder(), _hail_alert())
+
+    assert gen.fallbacks == 1
+    assert gen.llm_calls == 0
+    assert msg == TemplateGenerator().generate(_holder(), _hail_alert())
+
+
 # --- intent 007: mensagem consolidada (≥2 riscos → UM aviso) ---
 
 
@@ -268,8 +318,9 @@ class TestLlmGeneratorConsolidated:
         assert "Maria Silva" in prompt
         assert "granizo" in prompt.lower()
         assert "onda de calor" in prompt.lower()
-        assert "estacionamento coberto" in prompt  # rec do granizo
-        assert "hidrata" in prompt.lower()  # rec da onda de calor
+        assert "local coberto" in prompt  # rec da célula Auto do granizo
+        assert "pneus" in prompt  # rec da célula Auto da onda de calor
+        assert "nível global" in prompt  # INMET global (evento mais severo)
 
     def test_consolidado_fallback_silencioso_para_template(self) -> None:
         """Given erro de LLM, when generate_consolidated, then fallback
@@ -287,8 +338,8 @@ class TestLlmGeneratorConsolidated:
         assert gen.fallbacks == 1
         assert gen.llm_calls == 0
 
-    def test_consolidado_saida_longa_truncada_para_480(self) -> None:
-        agent = _FakeAgent("x" * 600)
+    def test_consolidado_saida_longa_truncada_para_limite(self) -> None:
+        agent = _FakeAgent("x" * 700)
         gen = LlmGenerator(agent=agent)
 
         msg = gen.generate_consolidated(

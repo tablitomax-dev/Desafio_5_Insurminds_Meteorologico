@@ -11,9 +11,11 @@ from app.domain.risk import (
     STRONG_WIND_KMH,
     ExtremeColdRule,
     FogRule,
+    FrostRule,
     HailRule,
     HeatRule,
     HeavyRainRule,
+    LowHumidityRule,
     RiskEngine,
     RiskKind,
     RoughSeaRule,
@@ -78,14 +80,16 @@ class TestHeavyRainRule:
         assert alert.kind is RiskKind.HEAVY_RAIN
         assert alert.holder_id == "h-001"
 
-    def test_segurado_apenas_auto_nao_recebe_alerta_de_chuva(self):
-        """Given mesmo snapshot, when avaliado segurado apenas AUTO,
-        then nenhum alerta."""
+    def test_segurado_apenas_auto_tambem_recebe_alerta_de_chuva(self):
+        """Bateria 008: chuva intensa atinge AMBOS os ramos (vias
+        alagadas, garagens baixas) — segurado apenas AUTO recebe."""
         rule = HeavyRainRule()
         holder_auto = make_holder(
             types=frozenset({InsuranceType.AUTO}), id="h-auto"
         )
-        assert rule.evaluate(make_snapshot(precipitation=12.0), holder_auto) is None
+        alert = rule.evaluate(make_snapshot(precipitation=12.0), holder_auto)
+        assert alert is not None
+        assert alert.kind is RiskKind.HEAVY_RAIN
 
     def test_precipitacao_abaixo_do_limiar_nao_gera_alerta(self):
         """Given precipitação abaixo do limiar, when avaliado,
@@ -149,10 +153,14 @@ class TestHailRule:
         holder = make_holder(types=frozenset({InsuranceType.AUTO}), id="h-auto")
         assert rule.evaluate(make_snapshot(weathercode=61), holder) is None
 
-    def test_granizo_sem_seguro_auto_nao_gera_alerta(self):
+    def test_granizo_tambem_atinge_residencial(self):
+        """Bateria 008: granizo atinge AMBOS os ramos (telhado, janelas
+        e vidros na casa)."""
         rule = HailRule()
         holder = make_holder(types=frozenset({InsuranceType.RESIDENTIAL}))
-        assert rule.evaluate(make_snapshot(weathercode=99), holder) is None
+        alert = rule.evaluate(make_snapshot(weathercode=99), holder)
+        assert alert is not None
+        assert alert.kind is RiskKind.HAIL
 
     def test_severidade_high(self):
         rule = HailRule()
@@ -163,52 +171,58 @@ class TestHailRule:
 
 
 # ---------------------------------------------------------------------------
-# Story 04 — vento forte → região costeira (tier base + escalonamento V2)
+# Story 04 — vento forte (tier base + escalonamento V2). EMENDA do dono
+# (2026-09-13, ADR-011): o gate geográfico da story original foi removido
+# — o vento forte dispara para segurados de QUALQUER região.
 # ---------------------------------------------------------------------------
 
 
 class TestStrongWindRule:
-    def test_vento_acima_do_limiar_costeiro_gera_alerta(self):
+    def test_vento_acima_do_limiar_gera_alerta(self):
         """Given snapshot com vento ≥ limiar (60 km/h), when StrongWindRule
-        avalia segurado marcado região costeira, then alerta gerado."""
+        avalia o segurado, then alerta gerado (qualquer região)."""
         rule = StrongWindRule()
-        holder = make_holder(is_coastal=True, id="h-costa")
+        holder = make_holder(id="h-costa")
         alert = rule.evaluate(make_snapshot(wind=65.0), holder)
         assert alert is not None
         assert alert.kind is RiskKind.STRONG_WIND
         assert alert.holder_id == "h-costa"
 
-    def test_segurado_nao_costeiro_com_mesmo_vento_nao_recebe_alerta(self):
-        """Given segurado não-costeiro com mesmo vento, when avaliado,
-        then nenhum alerta (regra restrita à costa)."""
+    def test_segurado_nao_costeiro_com_mesmo_vento_tambem_recebe_alerta(self):
+        """Given segurado não-costeiro com vento ≥ limiar, when avaliado,
+        then alerta gerado (emenda do dono 2026-09-13: sem gate geográfico)."""
         rule = StrongWindRule()
         holder = make_holder(is_coastal=False)
-        assert rule.evaluate(make_snapshot(wind=65.0), holder) is None
+        alert = rule.evaluate(make_snapshot(wind=65.0), holder)
+        assert alert is not None
+        assert alert.severity is Severity.MEDIUM
 
     def test_vento_abaixo_do_limiar_nao_gera_alerta(self):
         rule = StrongWindRule()
-        holder = make_holder(is_coastal=True)
+        holder = make_holder()
         alert = rule.evaluate(make_snapshot(wind=STRONG_WIND_KMH - 1.0), holder)
         assert alert is None
 
     def test_limiar_e_configuravel(self):
         rule = StrongWindRule(threshold_kmh=40.0)
-        holder = make_holder(is_coastal=True)
+        holder = make_holder()
         alert = rule.evaluate(make_snapshot(wind=45.0), holder)
         assert alert is not None
 
     def test_vento_80_km_escala_para_very_high(self):
-        """V2: vento ≥80 km/h → VERY_HIGH (ainda restrito ao litoral)."""
+        """V2: vento ≥80 km/h → VERY_HIGH (qualquer região)."""
         rule = StrongWindRule()
-        holder = make_holder(is_coastal=True)
+        holder = make_holder()
         alert = rule.evaluate(make_snapshot(wind=85.0), holder)
         assert alert is not None
         assert alert.severity is Severity.VERY_HIGH
 
-    def test_vento_80_km_nao_costeiro_nao_gera_alerta(self):
+    def test_vento_80_km_nao_costeiro_gera_alerta_very_high(self):
         rule = StrongWindRule()
         holder = make_holder(is_coastal=False)
-        assert rule.evaluate(make_snapshot(wind=85.0), holder) is None
+        alert = rule.evaluate(make_snapshot(wind=85.0), holder)
+        assert alert is not None
+        assert alert.severity is Severity.VERY_HIGH
 
 
 # ---------------------------------------------------------------------------
@@ -423,18 +437,20 @@ class TestRoughSeaRule:
         assert alert.kind is RiskKind.ROUGH_SEA
         assert alert.severity is Severity.VERY_HIGH
 
-    def test_litoral_apenas_auto_nao_recebe_ressaca(self):
-        """Escopo por ramo: imóvel litorâneo é a exposição da ressaca."""
+    def test_litoral_apenas_auto_tambem_recebe_ressaca(self):
+        """Bateria 008: ressaca atinge AMBOS os ramos no litoral
+        (veículos na orla e estacionamentos baixos)."""
         rule = RoughSeaRule()
         holder = make_holder(
             types=frozenset({InsuranceType.AUTO}),
             is_coastal=True,
             id="h-costa-auto",
         )
-        assert (
-            rule.evaluate(make_snapshot(precipitation=40.0, wind=90.0), holder)
-            is None
+        alert = rule.evaluate(
+            make_snapshot(precipitation=40.0, wind=90.0), holder
         )
+        assert alert is not None
+        assert alert.kind is RiskKind.ROUGH_SEA
 
     def test_nao_costeiro_nao_recebe_ressaca(self):
         rule = RoughSeaRule()
@@ -451,6 +467,62 @@ class TestRoughSeaRule:
             rule.evaluate(make_snapshot(precipitation=40.0, wind=70.0), holder)
             is None
         )
+
+
+# ---------------------------------------------------------------------------
+# Bateria preventiva (intent 008) — tempo seco e geada
+# ---------------------------------------------------------------------------
+
+
+class TestLowHumidityRule:
+    def test_umidade_abaixo_de_30_dispara_low_humidity(self):
+        rule = LowHumidityRule()
+        alert = rule.evaluate(
+            make_snapshot(humidity=25.0), make_holder()
+        )
+        assert alert is not None
+        assert alert.kind is RiskKind.LOW_HUMIDITY
+        assert alert.severity is Severity.LOW
+
+    def test_umidade_abaixo_de_20_escala_para_medium(self):
+        rule = LowHumidityRule()
+        alert = rule.evaluate(
+            make_snapshot(humidity=15.0), make_holder()
+        )
+        assert alert is not None
+        assert alert.severity is Severity.MEDIUM
+
+    def test_umidade_acima_do_limiar_nao_dispara(self):
+        rule = LowHumidityRule()
+        assert (
+            rule.evaluate(make_snapshot(humidity=35.0), make_holder()) is None
+        )
+
+    def test_umidade_desconhecida_pula_a_regra(self):
+        rule = LowHumidityRule()
+        holder = make_holder(
+            types=frozenset({InsuranceType.RESIDENTIAL, InsuranceType.AUTO})
+        )
+        assert rule.evaluate(make_snapshot(humidity=None), holder) is None
+
+
+class TestFrostRule:
+    def test_geada_zero_graus_dispara_high(self):
+        rule = FrostRule()
+        alert = rule.evaluate(make_snapshot(temperature=0.0), make_holder())
+        assert alert is not None
+        assert alert.kind is RiskKind.FROST
+        assert alert.severity is Severity.HIGH
+
+    def test_geada_extrema_negativa_e_very_high(self):
+        rule = FrostRule()
+        alert = rule.evaluate(make_snapshot(temperature=-3.0), make_holder())
+        assert alert is not None
+        assert alert.severity is Severity.VERY_HIGH
+
+    def test_temperatura_positiva_nao_dispara(self):
+        rule = FrostRule()
+        assert rule.evaluate(make_snapshot(temperature=1.0), make_holder()) is None
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,7 @@
 """Testes do pipeline de rodada — story 07 (relatório) + story 01 (falha)."""
 
+import threading
+
 from app.adapters.fixtures import FixtureWeatherProvider
 from app.domain.holders import InsuranceType, PolicyHolder
 from app.domain.messages import TemplateGenerator
@@ -185,3 +187,56 @@ def test_dois_riscos_mesmo_segurado_geram_uma_mensagem_consolidada():
     assert "chuva intensa" in texto
     assert "granizo" in texto
     assert report.sends[0].holder_id == "H001"
+
+
+def test_geracao_paralela_preserva_ordem_do_relatorio():
+    """Revisão de desempenho (008): given 3 segurados e gerador que só
+    retorna quando 3 chamadas rodam CONCORRENTES (barreira), when
+    run_round, then o pool paraleliza de fato e a ordem das mensagens
+    e dos envios segue a ordem dos segurados no relatório."""
+    serie: list[str] = []
+
+    class _BarreiraGenerator(TemplateGenerator):
+        """Falha a barreira (timeout) se as gerações forem em série."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.barreira = threading.Barrier(3)
+
+        def generate(self, holder, alert):  # noqa: ANN001, ANN201
+            try:
+                self.barreira.wait(timeout=5)
+            except threading.BrokenBarrierError:
+                serie.append(holder.id)
+                return super().generate(holder, alert)
+            return super().generate(holder, alert)
+
+    repository = _MapRepository(
+        [
+            _holder("H001", "Maria Silva", {InsuranceType.RESIDENTIAL},
+                    lat=-23.55, lon=-46.63),
+            _holder("H002", "João Souza", {InsuranceType.AUTO},
+                    lat=-23.53, lon=-46.64),
+            _holder("H003", "Ana Lima", {InsuranceType.RESIDENTIAL},
+                    lat=-23.51, lon=-46.65),
+        ]
+    )
+    provider = FixtureWeatherProvider(
+        snapshots={
+            "-23.55|-46.63": _RAIN,
+            "-23.53|-46.64": _SP,
+            "-23.51|-46.65": _RAIN,
+        }
+    )
+
+    report = run_round(
+        repository=repository,
+        provider=provider,
+        engine=RiskEngine(),
+        generator=_BarreiraGenerator(),
+        sender=SimulatedSender(),
+    )
+
+    assert not serie, "gerações rodaram em série (pool não paralelizou)"
+    assert [m.holder_id for m in report.messages] == ["H001", "H002", "H003"]
+    assert [s.holder_id for s in report.sends] == ["H001", "H002", "H003"]

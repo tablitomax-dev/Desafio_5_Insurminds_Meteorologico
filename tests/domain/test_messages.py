@@ -1,4 +1,6 @@
-"""Testes do TemplateGenerator — story 05 (mensagem por template paramétrico)."""
+"""Testes do TemplateGenerator — story 05 (mensagem por template) +
+bateria preventiva (intent 008: fases Antes/Durante por ramo, nível
+INMET e telefones de emergência)."""
 
 import pytest
 
@@ -7,16 +9,17 @@ from app.domain.messages import MAX_MESSAGE_CHARS, GeneratedMessage, TemplateGen
 from app.domain.risk import RiskKind, Severity
 from app.domain.weather import GeoLocation
 
-MAX_MESSAGE_CHARS_ASSERT = 480
+MAX_MESSAGE_CHARS_ASSERT = 600
 
 
-def make_holder(name: str = "Maria Silva") -> PolicyHolder:
+def make_holder(name: str = "Maria Silva", types=None) -> PolicyHolder:
     return PolicyHolder(
         id="h-001",
         name=name,
         phone="+5511999990001",
         location=GeoLocation(latitude=-23.55, longitude=-46.63),
-        insurance_types=frozenset({InsuranceType.RESIDENTIAL}),
+        insurance_types=types
+        or frozenset({InsuranceType.RESIDENTIAL, InsuranceType.AUTO}),
     )
 
 
@@ -26,10 +29,10 @@ def generator() -> TemplateGenerator:
 
 
 class TestTemplateGenerator:
-    def test_chuva_para_residencial_tem_saudacao_evento_e_recomendacoes(self, generator):
-        """Given RiskAlert de chuva para segurada Maria (RESIDENTIAL), when
-        TemplateGenerator gera, then mensagem tem saudação pelo nome, o
-        evento, e ≥ 2 recomendações específicas."""
+    def test_chuva_para_segurado_res_auto_tem_blocos_de_ramo(self, generator):
+        """Given alerta de chuva (medium → nível laranja) para segurada
+        com casa e carro, then mensagem tem saudação, nível INMET,
+        blocos Casa/Carro com recomendações e os telefones (regra 3)."""
         from app.domain.risk import RiskAlert
 
         alert = RiskAlert(
@@ -43,8 +46,63 @@ class TestTemplateGenerator:
         assert isinstance(message, GeneratedMessage)
         assert message.holder_id == "h-001"
         assert message.alert_kind is RiskKind.HEAVY_RAIN
-        assert "Maria Silva" in message.text
-        assert message.text.count("•") >= 2
+        texto = message.text
+        assert "Maria Silva" in texto
+        assert "nível laranja" in texto  # severidade INMET (regra 2)
+        assert "prevenir" in texto
+        assert "Casa:" in texto  # bloco do ramo residencial (regra 1)
+        assert "Carro:" in texto  # bloco do ramo auto
+        assert "calhas" in texto.lower()  # rec "Antes" da célula Casa
+        assert "199" in texto  # telefones em laranja+ (regra 3)
+        assert texto.count(".") >= 4
+
+    def test_severidade_low_usa_so_fase_antes(self, generator):
+        """Regra 4: nível amarelo (LOW) → só recomendações ANTES."""
+        from app.domain.risk import RiskAlert
+
+        low = RiskAlert(
+            kind=RiskKind.LOW_HUMIDITY,
+            severity=Severity.LOW,
+            reason="umidade de 25%",
+            holder_id="h-001",
+        )
+        msg = generator.generate(make_holder(), low)
+        assert "nível amarelo" in msg.text
+        # Recomendação da fase ANTES presente; a fase DURANTE não entra.
+        assert "Deixe água" in msg.text
+
+    def test_severidade_medium_ou_mais_inclui_fase_durante(self, generator):
+        """Regra 4: laranja+ → diretrizes [Antes] e [Durante]."""
+        from app.domain.risk import RiskAlert
+
+        alert = RiskAlert(
+            kind=RiskKind.FOG,
+            severity=Severity.MEDIUM,
+            reason="neblina densa",
+            holder_id="h-001",
+        )
+        texto = generator.generate(
+            make_holder(types=frozenset({InsuranceType.AUTO})), alert
+        ).text
+        assert "nível laranja" in texto
+        # Rec da fase DURANTE (farol baixo, reduzir, distância).
+        assert "reduza a velocidade" in texto.lower()
+
+    def test_segurado_apenas_auto_nao_recebe_precaucoes_de_casa(self, generator):
+        """Regra 1: só as células dos ramos contratados."""
+        from app.domain.risk import RiskAlert
+
+        alert = RiskAlert(
+            kind=RiskKind.HEAVY_RAIN,
+            severity=Severity.MEDIUM,
+            reason="precipitação de 12.0 mm/h",
+            holder_id="h-001",
+        )
+        texto = generator.generate(
+            make_holder(types=frozenset({InsuranceType.AUTO})), alert
+        ).text
+        assert "Carro:" in texto
+        assert "Casa:" not in texto
 
     def test_mensagem_respeita_limite_de_480_chars(self, generator):
         """Given qualquer alerta, when gerada, then mensagem ≤ 480 chars."""
@@ -80,13 +138,14 @@ class TestTemplateGenerator:
             (RiskKind.HEAVY_RAIN, "chuva"),
             (RiskKind.HAIL, "granizo"),
             (RiskKind.STRONG_WIND, "vento"),
-            # V2 (intent 005): novos kinds também têm mensagem mapeada.
             (RiskKind.HEAT, "calor"),
             (RiskKind.HEAT_WAVE, "onda de calor"),
             (RiskKind.EXTREME_COLD, "frio"),
             (RiskKind.FOG, "neblina"),
             (RiskKind.STORM, "tempestade"),
             (RiskKind.ROUGH_SEA, "ressaca"),
+            (RiskKind.LOW_HUMIDITY, "tempo seco"),
+            (RiskKind.FROST, "geada"),
             (RiskKind.MULTIPLE_RISKS, "riscos meteorológicos"),
         ],
     )
@@ -120,11 +179,11 @@ class TestTemplateGenerator:
         assert hail_text != wind_text
 
     def test_constante_de_limite_de_acordo_com_story(self):
-        assert MAX_MESSAGE_CHARS == 480
+        assert MAX_MESSAGE_CHARS == 600
 
 
 class TestTemplateGeneratorConsolidated:
-    """Mensagem consolidada (intent 007): ≥2 riscos → UMA mensagem."""
+    """Mensagem consolidada (intent 007 + bateria 008): ≥2 riscos → 1 msg."""
 
     @staticmethod
     def _alert(kind, severity, reason="motivo"):
@@ -135,8 +194,8 @@ class TestTemplateGeneratorConsolidated:
         )
 
     def test_dois_riscos_geram_uma_mensagem_com_os_dois_eventos(self, generator):
-        """Granizo + onda de calor → texto cita os 2 eventos e ao menos
-        uma recomendação específica de cada, dentro do limite da story."""
+        """Granizo + onda de calor (segurado res+auto) → texto cita os 2
+        eventos, nível INMET global e recs específicas de cada um."""
         from app.domain.risk import Severity
 
         hail = self._alert(RiskKind.HAIL, Severity.HIGH)
@@ -146,11 +205,14 @@ class TestTemplateGeneratorConsolidated:
 
         assert msg.holder_id == "h-001"
         assert msg.alert_kind is RiskKind.MULTIPLE_RISKS
+        texto = msg.text.lower()
         assert "Pablo" in msg.text
-        assert "granizo" in msg.text.lower()
-        assert "onda de calor" in msg.text.lower()
-        assert "estacionamento coberto" in msg.text.lower()  # rec do granizo
-        assert "hidrata" in msg.text.lower()  # rec da onda de calor
+        assert "granizo" in texto
+        assert "onda de calor" in texto
+        assert "nível preto" in texto  # severidade máxima (regra 2)
+        assert "local coberto" in texto  # rec da célula Auto do granizo
+        assert "climatização" in texto  # rec da célula Casa da onda de calor
+        assert "199" in texto  # telefones (regra 3)
         assert len(msg.text) <= MAX_MESSAGE_CHARS
 
     def test_evento_mais_severo_vem_primeiro(self, generator):
@@ -167,7 +229,7 @@ class TestTemplateGeneratorConsolidated:
 
     def test_resumo_multiple_risks_nao_duplica_no_texto(self, generator):
         """O alerta-resumo MULTIPLE_RISKS não entra na lista de eventos
-        (recomendações genéricas viriam duplicadas) — define só o kind."""
+        (células genéricas duplicariam) — define só o kind."""
         from app.domain.risk import Severity
 
         hail = self._alert(RiskKind.HAIL, Severity.HIGH)
@@ -176,7 +238,7 @@ class TestTemplateGeneratorConsolidated:
         msg = generator.generate_consolidated(make_holder(), [hail, resumo])
 
         assert msg.text.lower().count("granizo") == 1
-        assert "alertas simultâneos" in msg.text
+        assert "alertas na sua região" in msg.text
 
     def test_tres_riscos_citam_os_tres_e_cabem_no_limite(self, generator):
         from app.domain.risk import Severity
@@ -190,23 +252,25 @@ class TestTemplateGeneratorConsolidated:
         msg = generator.generate_consolidated(make_holder(), alerts)
 
         texto = msg.text.lower()
-        assert "chuva intensa" in texto
-        assert "granizo" in texto
-        assert "onda de calor" in texto
+        for snippet in ("chuva intensa", "granizo", "onda de calor"):
+            assert snippet in texto
         assert len(msg.text) <= MAX_MESSAGE_CHARS
 
     def test_recomendacoes_repetidas_entre_eventos_sao_dedupadas(self, generator):
-        """Chuva intensa e tempestade compartilham a recomendação de
-        raios — no consolidado ela aparece uma única vez."""
+        """Heat e onda de calor compartilham a diretriz de nunca deixar
+        pessoas/animais no veículo — aparece uma única vez."""
         from app.domain.risk import Severity
 
-        rain = self._alert(RiskKind.HEAVY_RAIN, Severity.MEDIUM)
-        storm = self._alert(RiskKind.STORM, Severity.HIGH)
+        only_auto = frozenset({InsuranceType.AUTO})
+        heat = self._alert(RiskKind.HEAT, Severity.HIGH)
+        wave = self._alert(RiskKind.HEAT_WAVE, Severity.VERY_HIGH)
 
-        msg = generator.generate_consolidated(make_holder(), [rain, storm])
+        msg = generator.generate_consolidated(
+            make_holder(types=only_auto), [heat, wave]
+        )
 
         assert (
-            msg.text.lower().count("desligue aparelhos eletrônicos") == 1
+            msg.text.lower().count("nunca deixe crianças") == 1
         )
 
     def test_um_risco_so_nao_deveria_usar_consolidado(self, generator):

@@ -55,8 +55,10 @@ fixtures offline determinísticas) e modo de mensagem (LLM com fallback
 por default, ou template determinístico). A **bancada de simulação**
 permite editar os dados fictícios — nome, telefone, **CEP** (resolve
 bairro/cidade e coordenadas via BrasilAPI, com degradação graciosa),
-perfil de seguros, litoral e, no offline, o tempo simulado (o alerta é
-gerado automaticamente pelas regras analisando o tempo informado). A tela
+perfil de seguros, litoral e, no offline, o tempo simulado — weathercode
+(com dicionário WMO na UI), precipitação, vento, temperatura e umidade
+editáveis; o alerta é gerado automaticamente pelas regras analisando o
+tempo informado. A tela
 mostra KPIs da rodada, a tabela de **segurados monitorados** (bairro/
 cidade — bairros reais validados via OpenStreetMap/Nominatim —,
 coordenadas a 4 casas, tempo atual e alerta gerado), alertas por regra,
@@ -83,30 +85,37 @@ da story 07). O destino é resolvido por telefone no banco de vínculos
    (status `sent`). Sem token ou sem vínculo o envio vira `skipped`
    com o motivo — e a rodada segue intacta (degradação, ADR-008).
 
-## Regras de negócio (detecção de risco — V2)
+## Regras de negócio (detecção de risco — bateria preventiva)
 
-| Evento | Gatilho | Impactados | Severidade |
-|---|---|---|---|
-| Chuva intensa | precipitação ≥ 10 mm/h (≥ 20 high / ≥ 35 very_high) | segurados **residenciais** | medium → very_high |
-| Granizo | weathercode de granizo (WMO) | segurados **auto** | high |
-| Vento forte | vento ≥ 60 km/h (≥ 80 very_high) | região **costeira** | medium → very_high |
-| Calor / onda de calor | ≥ 35 °C / ≥ 38 °C | residencial ou auto | high / very_high |
-| Frio intenso | ≤ 10 °C (≤ 5 very_high) | residencial ou auto | high → very_high |
-| Neblina | umidade ≥ 95% + vento ≤ 15 km/h + chuva ≤ 10 mm/h | auto | medium → high |
-| Tempestade | chuva ≥ 30 + vento ≥ 60 km/h (35/80 very_high) | residencial ou auto | high → very_high |
-| Ressaca | litoral + vento ≥ 80 km/h + chuva ≥ 30 mm/h | residencial (litoral) | very_high |
-| Múltiplos riscos | ≥ 2 riscos simultâneos | idem aos componentes | severidade máxima |
+| Evento | Gatilho | Casas (residencial) | Carros (auto) | Severidade |
+|---|---|---|---|---|
+| Chuva intensa | precipitação ≥ 10 mm/h (≥ 20 high / ≥ 35 very_high) | ✅ alagamento/infiltração | ✅ vias alagadas/garagem baixa | medium → very_high |
+| Granizo | weathercode WMO | ✅ telhado/vidros | ✅ lataria | high |
+| Vento forte | vento ≥ 60 km/h (≥ 80 very_high) | ✅ cobertura/objetos | ✅ galhos/projeções | medium → very_high |
+| Calor / onda de calor | ≥ 35 °C / ≥ 38 °C | ✅ carga elétrica | ✅ superaquecimento | high → very_high |
+| Frio intenso | ≤ 10 °C (≤ 5 very_high) | ✅ aquecedores/CO | ✅ bateria/partida | high → very_high |
+| Neblina | umidade ≥ 95% + vento ≤ 15 km/h + chuva ≤ 10 mm/h | — | ✅ visibilidade | medium → high |
+| Tempestade | chuva ≥ 30 + vento ≥ 60 km/h (35/80 very_high) | ✅ raios/alagamento | ✅ coberto | high → very_high |
+| Ressaca (litoral) | vento ≥ 80 km/h + chuva ≥ 30 mm/h | ✅ maré/vedação | ✅ orla/estacionamento baixo | very_high |
+| Tempo seco | umidade < 30% (< 20% medium) | ✅ respiratório/incêndio | ✅ filtro/água | low → medium |
+| Geada | ≤ 0 °C (≤ −2 °C very_high) | ✅ tubulações | ✅ gelo/vidros | high → very_high |
+| Múltiplos riscos | ≥ 2 riscos simultâneos (UM aviso consolidado) | idem aos eventos | idem aos eventos | severidade máxima |
 
-Cada mensagem traz nome do segurado, evento, severidade e **≥ 2 recomendações
-preventivas específicas** do tipo de evento, limitada a 480 caracteres. Com
-**≥ 2 riscos simultâneos para o mesmo segurado, ele recebe UMA única
-mensagem consolidada** (intent 007) — do evento mais severo ao menos, com
-as precauções específicas de cada um (recomendações repetidas entre
-eventos aparecem uma só vez); o relatório da rodada segue exibindo cada
-alerta individualmente. As regras são **escopadas por ramo com exposição
-material** (classificação pessoal/residencial/auto — ADR-009); a neblina
-pula a avaliação quando o Open-Meteo não traz umidade (`humidity_pct`
-opcional no snapshot).
+Cada mensagem é montada a partir da **bateria preventiva**
+(`app/domain/risk_battery`, derivada da tabela de negócio
+[`tabela-alertas-preventiva.md`](memory-bank/standards/tabela-alertas-preventiva.md)):
+células **Risco × Ramo × Fase (Antes/Durante)**, com as precauções
+**SOMENTE dos ramos que o segurado contratou**, **nível INMET** na
+abertura (amarelo monitorar → laranja prevenir → vermelho agir hoje →
+preto agir imediatamente) e telefones de emergência (199/193/192) em
+**laranja ou superior**. Nada de conteúdo pós-sinistro (alerta 100%
+preventivo). Com **≥ 2 riscos simultâneos o segurado recebe UMA única
+mensagem consolidada** (intent 007), do evento mais severo ao menos, com
+dedup de recomendações repetidas — limite de 600 caracteres (story 05;
+elevado de 480 a pedido do dono, 2026-09-08).
+A neblina (e o tempo seco) pulam quando o Open-Meteo não traz umidade
+(`humidity_pct` opcional no snapshot); as regras do desafio cobrem os
+ramos **residencial e auto** (ADR-011, supersedes ADR-009).
 
 ## Arquitetura (Ports & Adapters / DDD modular)
 
@@ -134,7 +143,7 @@ executor usado pelas ferramentas AI-DLC deste repositório).
 
 ## Qualidade e governança
 
-- **TDD** vermelho→verde em todas as units; **194 testes** do produto +
+- **TDD** vermelho→verde em todas as units; **209 testes** do produto +
   **122** da suíte AI-DLC (`pytest`), **ruff** e **mypy** limpos.
 - **CI obrigatório** em todo PR/push para `main` (`.github/workflows/ci.yml`):
   `ruff check .` + `mypy app` + `pytest`.

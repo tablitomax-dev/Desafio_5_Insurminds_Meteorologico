@@ -43,6 +43,16 @@ _DEFAULT_RETRIES = 2
 _RETRY_DELAY_S = 0.2
 _CHAT_ID_RE = re.compile(r"-?\d+")
 
+# Token do BotFather: "<bot_id>:<hash>" (ex.: "123456789:AAHdqTcv...").
+# Tokens com espaços/caracteres de controle (ex.: texto colado no campo
+# da UI) são rejeitados ANTES de montar a URL — sem http.client.InvalidURL
+# (bug de 2026-09-13): viram TelegramApiError e a rodada degrada.
+_TOKEN_RE = re.compile(r"\d+:[A-Za-z0-9_-]+")
+
+
+def _token_valido(token: str) -> bool:
+    return bool(_TOKEN_RE.fullmatch(token))
+
 
 class TelegramApiError(RuntimeError):
     """Erro da Telegram Bot API (HTTP/JSON) — degrada, não quebra a rodada."""
@@ -110,6 +120,11 @@ class _TelegramClient:
         self.retry_delay_s = retry_delay_s
 
     def call(self, method: str, payload: dict[str, Any]) -> Any:
+        if not _token_valido(self.token):
+            raise TelegramApiError(
+                f"{method}: token do bot ausente ou inválido "
+                "(formato do BotFather: <id>:<hash>)"
+            )
         url = f"{API_BASE}{self.token}/{method}"
         last_error: Exception | None = None
         for attempt in range(self.retries + 1):
@@ -148,7 +163,8 @@ class _TelegramClient:
 class TelegramSender:
     """Envio real via Telegram (port NotificationSender — intents 004/006).
 
-    - sem token: todo envio vira "skipped" (nenhuma chamada de rede);
+    - token ausente ou inválido (fora do formato <id>:<hash> do
+      BotFather): todo envio vira "skipped" (nenhuma chamada de rede);
     - telefone sem vínculo no repositório: "skipped" — Telegram não
       entrega por telefone; o vínculo nasce do /start + contato
       compartilhado (ou do teclado `send_contact_request`) e fica
@@ -174,14 +190,15 @@ class TelegramSender:
     def send(
         self, holder: PolicyHolder, message: GeneratedMessage
     ) -> NotificationRecord:
-        if not self.token:
+        if not _token_valido(self.token):
             return NotificationRecord(
                 holder_id=holder.id,
                 channel="telegram",
                 message=message.text,
                 sent_at=datetime.now(UTC),
                 status="skipped",
-                detail="token do bot ausente (TELEGRAM_BOT_TOKEN)",
+                detail="token do bot ausente ou inválido "
+                "(formato do BotFather: <id>:<hash>)",
             )
         phone_digits = "".join(ch for ch in holder.phone if ch.isdigit())
         chat_id = self._links.get_chat_id_by_phone(phone_digits) or ""

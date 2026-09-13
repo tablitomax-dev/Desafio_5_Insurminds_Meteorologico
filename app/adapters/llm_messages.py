@@ -22,6 +22,7 @@ Contrato de env (resolvido no composition root, `build_generator`):
 from __future__ import annotations
 
 import os
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -32,20 +33,37 @@ from app.domain.messages import (
     EVENT_BY_KIND,
     EVENT_NAME_BY_KIND,
     MAX_MESSAGE_CHARS,
-    RECOMMENDATIONS_BY_KIND,
     GeneratedMessage,
     MessageGenerator,
     TemplateGenerator,
 )
-from app.domain.risk import RiskAlert, RiskKind
+from app.domain.risk import RiskAlert, RiskKind, Severity
+from app.domain.risk_battery import (
+    BRANCH_LABELS,
+    EMERGENCY_PHONES,
+    RISK_BATTERY,
+    cells_for,
+    level_for,
+    phases_for,
+)
 
 # Mesmo binding do executor do ai-dlc (OpenRouter; key em OPENROUTER_API_KEY).
 DEFAULT_MODEL: str = "openrouter:z-ai/glm-5.3-flash"
 
+# Base da API (duplicada aqui para passar o AsyncOpenAI já configurado).
+OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+
 # A rodada emite N mensagens em sequência; provedores limitam taxa por
 # minuto → retry curto com backoff evita fallback por 429 transitório.
-RETRY_ATTEMPTS: int = 3  # 1 tentativa + 2 retries
+RETRY_ATTEMPTS: int = 2  # 1 tentativa + 1 retry (pior caso ~3 min/mensagem)
 RETRY_DELAY_S: float = 1.0
+
+# Teto por tentativa (2026-09-13, decisão do dono: "garantir que a LLM
+# sempre faça as mensagens"). O fallback só assume com FALHA REAL do
+# provedor (sem chave, 429/5xx, resposta vazia) — lentidão NÃO cai mais
+# no template: o teto de parede cobre fila + geração (medição: ~31 s por
+# chamada com o provedor lento; 90 s dá folga).
+LLM_TIMEOUT_S: float = 90.0
 
 _TONE_RULES = (
     "Você é um assistente de comunicação proativa de uma seguradora."
@@ -57,21 +75,88 @@ _TONE_RULES = (
 )
 
 
+# Regras transversais da bateria de negócio (tabela-alertas-preventiva.md):
+# 1 ramos contratados; 2 severidade INMET; 3 telefones só em laranja+;
+# 4 fases Antes/Durante; 5 NUNCA pós-sinistro; 6 perfis vulneráveis.
+_TRANSVERSAL_RULES = (
+    "Regras transversais da bateria (OBRIGATÓRIAS):\n"
+    "1. Use APENAS as células dos ramos contratados informadas; não"
+    " invente precauções de outro ramo.\n"
+    "2. Tom e urgência seguem o nível INMET: amarelo=monitorar,"
+    " laranja=prevenir, vermelho=agir hoje, preto=agir imediatamente.\n"
+    "3. Telefones de emergência (Defesa Civil 199, Bombeiros 193, SAMU"
+    " 192) SOMENTE em nível laranja ou superior, quando indicados.\n"
+    "4. Fase: amarelo usa só as diretrizes [Antes]; laranja ou superior"
+    " usa [Antes] e [Durante].\n"
+    "5. NUNCA inclua instruções pós-sinistro (documentação de danos,"
+    " vistoria, acionamento do seguro), mesmo que o evento esteja em"
+    " andamento — o alerta é preventivo.\n"
+    "6. Perfis vulneráveis: se houver dados de idosos, crianças ou"
+    " animais, reforce hidratação no calor e aquecimento seguro no frio."
+)
+
+
+def _join(items: tuple[str, ...]) -> str:
+    return "; ".join(items)
+
+
+_SEV_RANK: dict[Severity, int] = {
+    Severity.LOW: 0,
+    Severity.MEDIUM: 1,
+    Severity.HIGH: 2,
+    Severity.VERY_HIGH: 3,
+}
+
+
+def _phones_line(has_phones: bool) -> str:
+    if has_phones:
+        return (
+            "Telefones de emergência para incluir no texto:"
+            f" {EMERGENCY_PHONES}"
+        )
+    return "Não inclua telefones de emergência (nível abaixo de laranja)."
+
+
+def _battery_lines(
+    kind: RiskKind,
+    insurance_types: frozenset,
+    severity: Severity,
+) -> str:
+    """Células do risco para os ramos CONTRATADOS (regra 1), com
+    impacto material e recomendações por fase (regra 4). Se o risco não
+    tem célula para nenhum ramo do segurado (defensivo), usa todas."""
+    cells = cells_for(kind, insurance_types) or RISK_BATTERY.get(kind, {})
+    fases = phases_for(severity)
+    linhas: list[str] = []
+    for branch, cell in cells.items():
+        label = BRANCH_LABELS[branch]
+        linhas.append(f"- [{label}] impacto possível: {_join(cell.impacts)}")
+        if "before" in fases:
+            linhas.extend(f"- [{label}][Antes] {rec}" for rec in cell.before)
+        if "during" in fases:
+            linhas.extend(f"- [{label}][Durante] {rec}" for rec in cell.during)
+    return "\n".join(linhas)
+
+
 def build_prompt(holder: PolicyHolder, alert: RiskAlert) -> str:
-    """Monta o prompt com contexto do segurado + evento + recomendações."""
+    """Monta o prompt com o contexto do segurado + CÉLULAS DA BATERIA
+    (intent 008): impactos e recomendações por fase dos ramos
+    contratados, nível INMET e as regras transversais do negócio."""
     event = EVENT_BY_KIND[alert.kind]
-    recommendations = "\n".join(
-        f"- {rec}" for rec in RECOMMENDATIONS_BY_KIND[alert.kind]
-    )
+    level = level_for(alert.severity)
     insurance = (
         ", ".join(sorted(t.value for t in holder.insurance_types)) or "n/d"
     )
     return (
-        f"{_TONE_RULES}\n\n"
+        f"{_TONE_RULES}\n\n{_TRANSVERSAL_RULES}\n"
         f"Segurado: {holder.name} (seguros: {insurance})\n"
-        f"Evento: {event}; severidade: {alert.severity.value}"
+        f"Evento: {event}; severidade: {alert.severity.value} →"
+        f" nível {level.label} ({level.action}, {level.window})"
         f" ({alert.reason})\n"
-        f"Recomendações preventivas:\n{recommendations}"
+        "Células da bateria (Risco × Ramo contratado, fases"
+        " Antes/Durante):\n"
+        f"{_battery_lines(alert.kind, holder.insurance_types, alert.severity)}"
+        f"\n{_phones_line(level.phones)}"
     )
 
 
@@ -89,33 +174,35 @@ _TONE_RULES_MULTI = (
 def build_prompt_consolidated(
     holder: PolicyHolder, alerts: Sequence[RiskAlert]
 ) -> str:
-    """Prompt da mensagem consolidada (intent 007): TODOS os eventos
-    simultâneos do segurado + recomendações específicas (dedup)."""
+    """Prompt da mensagem consolidada (intent 007 + bateria 008): TODOS
+    os eventos simultâneos, cada um com as células da bateria dos ramos
+    contratados; nível INMET global (evento mais severo)."""
     individuals = [
         a for a in alerts if a.kind is not RiskKind.MULTIPLE_RISKS
     ]
-    eventos: list[str] = []
-    usadas: set[str] = set()
-    recomendacoes: list[str] = []
-    for alert in individuals:
+    level = level_for(
+        max(individuals, key=lambda a: _SEV_RANK[a.severity]).severity
+    )
+    blocos: list[str] = []
+    for indice, alert in enumerate(individuals, start=1):
         nome = EVENT_NAME_BY_KIND[alert.kind]
-        eventos.append(
-            f"- {nome}; severidade: {alert.severity.value} ({alert.reason})"
+        level_evento = level_for(alert.severity)
+        blocos.append(
+            f"Evento {indice}: {nome} — severidade: {alert.severity.value}"
+            f" → nível {level_evento.label} ({level_evento.action})"
+            f" ({alert.reason})\n"
+            f"{_battery_lines(alert.kind, holder.insurance_types, alert.severity)}"
         )
-        for rec in RECOMMENDATIONS_BY_KIND[alert.kind]:
-            if rec not in usadas:
-                usadas.add(rec)
-                recomendacoes.append(f"- {rec} [{nome}]")
     insurance = (
         ", ".join(sorted(t.value for t in holder.insurance_types)) or "n/d"
     )
     return (
-        f"{_TONE_RULES_MULTI}\n\n"
+        f"{_TONE_RULES_MULTI}\n\n{_TRANSVERSAL_RULES}\n"
         f"Segurado: {holder.name} (seguros: {insurance})\n"
-        f"Eventos simultâneos ({len(individuals)}):\n"
-        + "\n".join(eventos)
-        + "\nRecomendações preventivas por evento:\n"
-        + "\n".join(recomendacoes)
+        f"Eventos simultâneos ({len(individuals)}) — nível global"
+        f" {level.label} ({level.action}):\n"
+        + "\n\n".join(blocos)
+        + f"\n{_phones_line(level.phones)}"
     )
 
 
@@ -124,9 +211,14 @@ class LlmGenerator:
     """Implementação opcional da port reescrevendo via LLM (Pydantic AI).
 
     `agent` injectável para testes (protocol mínimo: `run_sync(prompt)`
-    → objeto com `.output`). Sem agente injetado, cria o real de forma
-    LAZY na primeira geração (import do pydantic-ai); se a criação ou a
-    chamada falharem, cai no fallback silencioso.
+    → objeto com `.output`). Sem agente injetado, cria um agente real
+    POR TENTATIVA (import lazy do pydantic-ai) — cada tentativa roda em
+    event loop próprio (`asyncio.run`): o `httpx.AsyncClient` não pode
+    ser compartilhado entre event loops. Cada tentativa tem TETO DE
+    PAREDE (`LLM_TIMEOUT_S` via `asyncio.wait_for`) — o read timeout do
+    httpx não protege contra streaming lento (chunks chegando com gaps
+    menores que o teto esticaram UMA mensagem a 125,7 s em 2026-09-13).
+    Se a criação ou a chamada falharem, cai no fallback silencioso.
     """
 
     model: str = DEFAULT_MODEL
@@ -134,6 +226,7 @@ class LlmGenerator:
     agent: Any | None = None
     retry_attempts: int = field(default_factory=lambda: RETRY_ATTEMPTS)
     retry_delay_s: float = field(default_factory=lambda: RETRY_DELAY_S)
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
         if self.fallback is None:
@@ -142,9 +235,38 @@ class LlmGenerator:
         self.fallbacks: int = 0
 
     def _create_agent(self) -> Any:
-        # Import lazy: modo template não exige o SDK instalado.
+        # Import lazy: modo template não exige o SDK instalado. Para
+        # openrouter:, o timeout vai NO CONSTRUTOR do AsyncOpenAI: o SDK
+        # da openai aplica o PRÓPRIO timeout (default 600 s) por
+        # requisição e sobrescreve o de qualquer http_client. Teto de
+        # parede (asyncio.wait_for) por tentativa garante o corte mesmo
+        # com streaming lento. max_retries=0 no SDK: o retry externo
+        # (RETRY_ATTEMPTS) é o único mecanismo de retry. A chave vem do
+        # env; ausente → ValueError → fallback silencioso.
         from pydantic_ai import Agent  # noqa: PLC0415 (lazy)
 
+        if self.model.startswith("openrouter:"):
+            from openai import AsyncOpenAI  # noqa: PLC0415 (lazy)
+            from pydantic_ai.models.openai import OpenAIModel  # noqa: PLC0415
+            from pydantic_ai.providers.openrouter import (  # noqa: PLC0415
+                OpenRouterProvider,
+            )
+
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise ValueError("OPENROUTER_API_KEY ausente")
+            provider = OpenRouterProvider(
+                openai_client=AsyncOpenAI(
+                    base_url=OPENROUTER_BASE_URL,
+                    api_key=api_key,
+                    timeout=LLM_TIMEOUT_S,
+                    max_retries=0,
+                )
+            )
+            model = OpenAIModel(
+                self.model.removeprefix("openrouter:"), provider=provider
+            )
+            return Agent(model, instructions=_TONE_RULES, output_type=str)
         return Agent(self.model, instructions=_TONE_RULES, output_type=str)
 
     def generate(
@@ -182,13 +304,13 @@ class LlmGenerator:
         holder: PolicyHolder,
         alert_kind: RiskKind,
     ) -> GeneratedMessage:
-        """Criação lazy do agente + chamada com retries + truncamento."""
-        if self.agent is None:
-            self.agent = self._create_agent()
+        """Agente POR TENTATIVA (event loop próprio por tentativa) com
+        teto de parede + retries + truncamento."""
         text = self._llm_text(prompt)
         if len(text) > MAX_MESSAGE_CHARS:
             text = text[: MAX_MESSAGE_CHARS - 1].rstrip() + "…"
-        self.llm_calls += 1
+        with self.lock:
+            self.llm_calls += 1
         return GeneratedMessage(
             holder_id=holder.id, alert_kind=alert_kind, text=text
         )
@@ -197,24 +319,29 @@ class LlmGenerator:
         self, delegate: Any
     ) -> GeneratedMessage:
         """Fallback silencioso: contabiliza e delega ao TemplateGenerator."""
-        self.fallbacks += 1
+        with self.lock:
+            self.fallbacks += 1
         fallback = self.fallback
         assert fallback is not None  # garantido em __post_init__
         return delegate(fallback)
 
-    def _llm_text(self, prompt: str) -> str:
-        """Chamada com retries para falhas transitórias (429/5xx/timeout).
+    def _agent_da_tentativa(self) -> Any:
+        """Agente da tentativa: o injetado (testes) ou um real novo
+        (event loop próprio — não compartilhar httpx entre loops)."""
+        if self.agent is not None:
+            return self.agent
+        return self._create_agent()
 
-        Resposta vazia também força retry. Esgotadas as tentativas,
-        propaga para o fallback silencioso do `generate`.
-        """
+    def _llm_text(self, prompt: str) -> str:
+        """Chamada com teto de parede + retries para falhas transitórias
+        (429/5xx/timeout). Resposta vazia também força retry. Esgotadas
+        as tentativas, propaga para o fallback silencioso do `generate`."""
         last_exc: Exception | None = None
-        agent = self.agent
-        assert agent is not None  # garantido pelo generate (criação lazy)
         for attempt in range(self.retry_attempts):
             try:
-                result = agent.run_sync(prompt)
-                text = str(result.output).strip()
+                text = str(
+                    self._run_com_teto(self._agent_da_tentativa(), prompt)
+                ).strip()
                 if text:
                     return text
             except Exception as exc:  # noqa: BLE001 (transiente)
@@ -222,6 +349,23 @@ class LlmGenerator:
             if attempt < self.retry_attempts - 1:
                 time.sleep(self.retry_delay_s * (attempt + 1))
         raise RuntimeError("LLM indisponível após retries") from last_exc
+
+    def _run_com_teto(self, agent: Any, prompt: str) -> Any:
+        """Uma tentativa com TETO DE PAREDE (`LLM_TIMEOUT_S`):
+        `asyncio.wait_for` cancela a requisição de verdade — o read
+        timeout do httpx não protege contra streaming lento (chunks
+        chegando com gaps menores que o teto). Agentes de teste (sync,
+        `run_sync`) rodam em thread; agentes reais (async, `run`) rodam
+        no loop da tentativa."""
+        import asyncio
+
+        async def _executar() -> Any:
+            run = getattr(agent, "run", None)
+            if run is not None and asyncio.iscoroutinefunction(run):
+                return (await run(prompt)).output
+            return (await asyncio.to_thread(agent.run_sync, prompt)).output
+
+        return asyncio.run(asyncio.wait_for(_executar(), timeout=LLM_TIMEOUT_S))
 
     def mode_label(self) -> str:
         """Modo exercitado na rodada, para o relatório (story 06)."""

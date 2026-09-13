@@ -6,14 +6,21 @@ dado WeatherSnapshot + PolicyHolder → list[RiskAlert].
 V2 (intent 005 / ADR-009): preserva as stories 02–04 como tier base e
 acrescenta tiers de severidade (chuva ≥20 HIGH / ≥35 VERY_HIGH; vento
 ≥80 VERY_HIGH), regras compostas (tempestade, ressaca) e novos tipos
-(calor, onda de calor, frio, neblina). As regras são ESCOPADAS POR
-RAMO com exposição material (classificação aprovada pelo dono): calor/
-onda, frio e tempestade → RESIDENTIAL ou AUTO; neblina → AUTO;
-ressaca → RESIDENTIAL; vento forte segue a story 04 (geográfico).
-Com ≥2 riscos simultâneos, o engine acrescenta UM resumo
-MULTIPLE_RISKS (severidade = máxima) DEPOIS dos alertas individuais.
-O fallback por perfil estatístico da planilha FICA FORA deste módulo
-(material de referência em `analise/`).
+(calor, onda de calor, frio, neblina). Com ≥2 riscos simultâneos, o
+engine acrescenta UM resumo MULTIPLE_RISKS (severidade = máxima)
+DEPOIS dos alertas individuais.
+
+BATERIA PREVENTIVA (intent 008 / ADR-011, supersedes ADR-009): cada
+regra dispara para os ramos COM EXPOSIÇÃO MATERIAL — chuva intensa e
+granizo agora atingem AMBOS os ramos (casa e veículo têm danos típicos
+próprios), vento atinge os dois ramos em QUALQUER região (emenda do
+dono, 2026-09-13 — vendavais causam dano material fora do litoral) e a
+ressaca segue restrita ao litoral; neblina permanece AUTO. Novas regras: tempo seco (umidade < 30%, LOW/MEDIUM) e
+geada (≤ 0 °C, HIGH; ≤ −2 °C VERY_HIGH). O CONTEÚDO das mensagens vem
+da bateria (`app.domain.risk_battery`, derivada de
+`memory-bank/standards/tabela-alertas-preventiva.md`). O fallback por
+perfil estatístico da planilha FICA FORA deste módulo (material de
+referência em `analise/`).
 """
 
 from __future__ import annotations
@@ -46,6 +53,11 @@ STORM_RAIN_MM_H: float = 30.0
 STORM_WIND_KMH: float = STRONG_WIND_KMH
 ROUGH_SEA_WIND_KMH: float = VERY_STRONG_WIND_KMH
 ROUGH_SEA_RAIN_MM_H: float = 30.0
+# Bateria preventiva (intent 008 — tabela-alertas-preventiva.md).
+LOW_HUMIDITY_PCT: float = 30.0
+LOW_HUMIDITY_MEDIUM_PCT: float = 20.0
+FROST_C: float = 0.0
+FROST_VERY_HIGH_C: float = -2.0
 
 
 class RiskKind(str, Enum):
@@ -60,6 +72,8 @@ class RiskKind(str, Enum):
     FOG = "fog"
     STORM = "storm"
     ROUGH_SEA = "rough_sea"
+    LOW_HUMIDITY = "low_humidity"
+    FROST = "frost"
     MULTIPLE_RISKS = "multiple_risks"
 
 
@@ -77,10 +91,12 @@ _SEVERITY_RANK: dict[Severity, int] = {
     Severity.VERY_HIGH: 4,
 }
 
-# Escopo por ramo (classificação aprovada pelo dono — intent 005):
-# regras V2 só disparam para ramos com exposição material ao risco.
-# Calor/onda, frio e tempestade: RESIDENTIAL ou AUTO; neblina: AUTO;
-# ressaca: RESIDENTIAL; vento forte segue a story 04 (geográfico/litoral).
+# Escopo por ramo (ADRs 009 e 011): cada regra dispara para os ramos
+# COM EXPOSIÇÃO MATERIAL ao risco. Bateria preventiva (intent 008):
+# chuva intensa e granizo atingem AMBOS os ramos (casa e veículo têm
+# danos típicos próprios); neblina permanece AUTO (risco do condutor);
+# vento atinge os dois ramos em qualquer região (emenda do dono,
+# 2026-09-13); a ressaca permanece geográfica (litoral).
 _AUTO_OR_RESIDENTIAL: frozenset[InsuranceType] = frozenset(
     {InsuranceType.RESIDENTIAL, InsuranceType.AUTO}
 )
@@ -105,8 +121,10 @@ class RiskRule(Protocol):
 
 
 class HeavyRainRule:
-    """Story 02 (tier base): precipitação ≥ limiar → segurados
-    RESIDENTIAL. Escala com a chuva: ≥20 HIGH, ≥35 VERY_HIGH."""
+    """Story 02 (tier base): precipitação ≥ limiar → RESIDENTIAL **ou**
+    AUTO (bateria 008: alagamento/infiltração na casa; vias alagadas e
+    garagens baixas no veículo). Escala com a chuva: ≥20 HIGH,
+    ≥35 VERY_HIGH."""
 
     def __init__(self, threshold_mm_h: float = HEAVY_RAIN_MM_H):
         self.threshold_mm_h = threshold_mm_h
@@ -116,7 +134,7 @@ class HeavyRainRule:
     ) -> RiskAlert | None:
         if snapshot.precipitation_mm_h < self.threshold_mm_h:
             return None
-        if InsuranceType.RESIDENTIAL not in holder.insurance_types:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
             return None
         if snapshot.precipitation_mm_h >= VERY_HEAVY_RAIN_MM_H:
             severity = Severity.VERY_HIGH
@@ -136,14 +154,16 @@ class HeavyRainRule:
 
 
 class HailRule:
-    """Story 03: weathercode de granizo → segurados AUTO."""
+    """Story 03: weathercode de granizo → AUTO **ou** RESIDENTIAL
+    (bateria 008: lataria/vidros no veículo; telhado, janelas e vidros
+    na casa)."""
 
     def evaluate(
         self, snapshot: WeatherSnapshot, holder: PolicyHolder
     ) -> RiskAlert | None:
         if snapshot.condition is not WeatherCondition.HAIL:
             return None
-        if InsuranceType.AUTO not in holder.insurance_types:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
             return None
         return RiskAlert(
             kind=RiskKind.HAIL,
@@ -154,8 +174,12 @@ class HailRule:
 
 
 class StrongWindRule:
-    """Story 04 (tier base): vento ≥ limiar → segurados em região
-    costeira. Escala: ≥80 km/h → VERY_HIGH."""
+    """Story 04 (tier base): vento ≥ limiar → RESIDENTIAL ou AUTO.
+    EMENDA do dono (2026-09-13, ADR-011): o gate geográfico da story 04
+    foi removido — vendavais causam dano material em qualquer região; o
+    litoral segue como sinal exclusivo da RessacaRule. Escala:
+    ≥80 km/h → VERY_HIGH (bateria 008: cobertura/objetos na casa;
+    galhos e projeções no veículo)."""
 
     def __init__(self, threshold_kmh: float = STRONG_WIND_KMH):
         self.threshold_kmh = threshold_kmh
@@ -165,7 +189,7 @@ class StrongWindRule:
     ) -> RiskAlert | None:
         if snapshot.wind_kmh < self.threshold_kmh:
             return None
-        if not holder.is_coastal:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
             return None
         severity = (
             Severity.VERY_HIGH
@@ -175,7 +199,7 @@ class StrongWindRule:
         return RiskAlert(
             kind=RiskKind.STRONG_WIND,
             severity=severity,
-            reason=f"ventos de {snapshot.wind_kmh:.0f} km/h na região costeira",
+            reason=f"ventos de {snapshot.wind_kmh:.0f} km/h",
             holder_id=holder.id,
         )
 
@@ -300,15 +324,16 @@ class StormRule:
 
 class RoughSeaRule:
     """V2: ressaca — região costeira com vento ≥80 km/h E chuva
-    ≥30 mm/h (VERY_HIGH). Restrita ao litoral e escopada a RESIDENTIAL
-    (imóveis litorâneos são a exposição material)."""
+    ≥30 mm/h (VERY_HIGH). Restrita ao litoral, nos DOIS ramos (bateria
+    008: maré/invasão de água na casa; veículos na orla e
+    estacionamentos baixos)."""
 
     def evaluate(
         self, snapshot: WeatherSnapshot, holder: PolicyHolder
     ) -> RiskAlert | None:
         if not holder.is_coastal:
             return None
-        if InsuranceType.RESIDENTIAL not in holder.insurance_types:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
             return None
         if snapshot.wind_kmh < ROUGH_SEA_WIND_KMH:
             return None
@@ -321,6 +346,60 @@ class RoughSeaRule:
                 f"ressaca: ventos de {snapshot.wind_kmh:.0f} km/h e chuva de "
                 f"{snapshot.precipitation_mm_h:.1f} mm/h no litoral"
             ),
+            holder_id=holder.id,
+        )
+
+
+class LowHumidityRule:
+    """Bateria 008: tempo seco — umidade < 30% (LOW; < 20% → MEDIUM).
+    PULA quando a umidade é desconhecida (None). Escopado a
+    RESIDENTIAL/AUTO (respiratório/incêndio na casa; poeira e rotas com
+    fogo no veículo)."""
+
+    def evaluate(
+        self, snapshot: WeatherSnapshot, holder: PolicyHolder
+    ) -> RiskAlert | None:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
+            return None
+        humidity = snapshot.humidity_pct
+        if humidity is None:
+            return None
+        if humidity >= LOW_HUMIDITY_PCT:
+            return None
+        severity = (
+            Severity.MEDIUM
+            if humidity < LOW_HUMIDITY_MEDIUM_PCT
+            else Severity.LOW
+        )
+        return RiskAlert(
+            kind=RiskKind.LOW_HUMIDITY,
+            severity=severity,
+            reason=f"tempo seco: umidade de {humidity:.0f}%",
+            holder_id=holder.id,
+        )
+
+
+class FrostRule:
+    """Bateria 008: geada — temperatura ≤ 0 °C (HIGH; ≤ −2 °C →
+    VERY_HIGH). Escopado a RESIDENTIAL/AUTO (tubulações; gelo no
+    asfalto e vidros)."""
+
+    def evaluate(
+        self, snapshot: WeatherSnapshot, holder: PolicyHolder
+    ) -> RiskAlert | None:
+        if not holder.insurance_types & _AUTO_OR_RESIDENTIAL:
+            return None
+        if snapshot.temperature_c > FROST_C:
+            return None
+        severity = (
+            Severity.VERY_HIGH
+            if snapshot.temperature_c <= FROST_VERY_HIGH_C
+            else Severity.HIGH
+        )
+        return RiskAlert(
+            kind=RiskKind.FROST,
+            severity=severity,
+            reason=f"geada: temperatura de {snapshot.temperature_c:.1f} °C",
             holder_id=holder.id,
         )
 
@@ -341,6 +420,8 @@ class RiskEngine:
             FogRule(),
             StormRule(),
             RoughSeaRule(),
+            LowHumidityRule(),
+            FrostRule(),
         ),
     ):
         self.rules: tuple[RiskRule, ...] = tuple(rules)

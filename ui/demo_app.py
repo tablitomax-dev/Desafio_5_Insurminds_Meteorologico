@@ -7,18 +7,31 @@ segurados monitorados (bairro/cidade, coordenadas, tempo, alerta),
 mensagens com o modo exercitado sempre reportado.
 
 Bancada editável (dados fictícios): nome, telefone, CEP, seguros e
-cidade por segurado — sempre; e o TEMPO simulado
-(weathercode/precipitação/vento/temperatura) no modo offline. O alerta
-é gerado AUTOMATICAMENTE pelas regras do domínio analisando o tempo
-informado (o mesmo RiskEngine da CLI).
+cidade por segurado — sempre (ramos exibidos como “residencial”/“auto”
+— rótulo de UI; o valor canônico do domínio permanece “residential” —
+SEGURO_LABELS/SEGURO_ALIASES); e o TEMPO simulado
+(weathercode/precipitação/vento/temperatura/umidade) no modo offline,
+com dicionário WMO embutido (expander "Dicionário de weathercodes WMO",
+pedido do dono, 2026-09-13 — a banca entende qual código digitar). Umidade
+opcional: vazia = desconhecida e as regras que dependem dela (neblina,
+tempo seco) pulam, igual ao online. Célula climática vazia assume valor
+NEUTRO (weathercode 0, precipitação/vento 0, temperatura 21 °C — nunca
+0 °C, que dispararia geada) e linha de segurado sem NOME é excluída da
+rodada: a bancada limpa nunca quebra o app (pedido do dono, 2026-09-13).
+O alerta é gerado AUTOMATICAMENTE
+pelas regras do domínio analisando o tempo informado (o mesmo RiskEngine
+da CLI).
 
 CEP → coordenadas: BrasilAPI CEP v2 (`app.adapters.brasil_api`) com
 degradação graciosa — CEP sem coordenadas ou falha de rede NÃO quebra a
 rodada: usa as coordenadas dos seeds e lista os avisos. A banca NÃO
 edita latitude/longitude diretamente (pedido do dono, 2026-09-06).
 Ao digitar um CEP válido, o geocode é AUTOMÁTICO: bairro/cidade e o
-clima da região aparecem na hora (pedido do dono, 2026-09-06). O perfil
-de litoral NÃO é editável (vem dos seeds — regra do vento).
+clima da região aparecem na hora (pedido do dono, 2026-09-06). No
+OFFLINE o CEP é apenas RÓTULO (bairro/cidade): a simulação usa sempre
+as coordenadas dos seeds, onde as fixtures existem — nunca falha por
+CEP novo (pedido do dono, 2026-09-13). O perfil
+de litoral NÃO é editável (vem dos seeds — regra da ressaca).
 
 Envio (intents 004/006): SOMENTE Telegram real (o seletor de SMS foi
 removido a pedido do dono). O `TelegramSender` resolve o chat_id por
@@ -75,7 +88,11 @@ from app.adapters.telegram_links_sqlite import (  # noqa: E402
 from app.composition import run_proactive_round  # noqa: E402
 from app.domain.holders import InsuranceType, PolicyHolder  # noqa: E402
 from app.domain.ports import GeocodingError, WeatherProviderError  # noqa: E402
-from app.domain.weather import GeoLocation, classify_weathercode  # noqa: E402
+from app.domain.weather import (  # noqa: E402
+    WMO_SUPPORTED_CODES,
+    GeoLocation,
+    classify_weathercode,
+)
 from app.pipeline import format_report  # noqa: E402
 
 # Defaults da banca (pedido do dono): Online primeiro; LLM primeiro.
@@ -94,6 +111,9 @@ EVENT_LABELS = {
     "fog": "neblina",
     "storm": "tempestade",
     "rough_sea": "ressaca",
+    # Bateria preventiva (intent 008).
+    "low_humidity": "tempo seco",
+    "frost": "geada",
     "multiple_risks": "múltiplos riscos",
 }
 CONDITION_LABELS = {
@@ -114,7 +134,85 @@ SEVERITY_COLOR = {
     "very_high": "red",
 }
 
+# Rótulos de ramo na UI (pedido do dono, 2026-09-13: "residencial" em
+# vez de "residential" para a banca). O valor canônico do domínio
+# (InsuranceType RESIDENTIAL = "residential") só vive fora da tela.
+SEGURO_LABELS: dict[InsuranceType, str] = {
+    InsuranceType.RESIDENTIAL: "residencial",
+    InsuranceType.AUTO: "auto",
+}
+# Parse do campo "Seguros": aceita os rótulos da UI e o valor canônico.
+SEGURO_ALIASES: dict[str, InsuranceType] = {
+    "residencial": InsuranceType.RESIDENTIAL,
+    "residential": InsuranceType.RESIDENTIAL,
+    "auto": InsuranceType.AUTO,
+}
+
+# Dicionário WMO da bancada (pedido do dono, 2026-09-13): derivado do
+# domain (`WMO_SUPPORTED_CODES` + `classify_weathercode`) — nenhuma
+# classificação duplicada aqui.
+WMO_DICT_ROWS = [
+    {
+        "Código": code,
+        "Condição reconhecida": CONDITION_LABELS[
+            classify_weathercode(code).value
+        ],
+    }
+    for code in WMO_SUPPORTED_CODES
+]
+
+# Receitas de simulação: qual CAMPO dispara qual evento (as regras usam
+# as métricas; o weathercode só dispara granizo diretamente).
+RECEITA_ROWS = [
+    {"Para simular": "Granizo", "Digite": "weathercode 96 ou 99"},
+    {
+        "Para simular": "Chuva intensa",
+        "Digite": "precipitação 10 mm/h (20 = alta, 35 = muito alta)",
+    },
+    {
+        "Para simular": "Tempestade",
+        "Digite": "chuva ≥ 30 mm/h + vento ≥ 60 km/h",
+    },
+    {
+        "Para simular": "Vento forte",
+        "Digite": "vento ≥ 60 km/h (≥ 80 = muito alta; qualquer região)",
+    },
+    {
+        "Para simular": "Ressaca (litoral)",
+        "Digite": "vento ≥ 80 km/h + chuva ≥ 30 mm/h",
+    },
+    {
+        "Para simular": "Calor / onda de calor",
+        "Digite": "temperatura 35 °C (38 = onda)",
+    },
+    {
+        "Para simular": "Frio intenso",
+        "Digite": "temperatura 10 °C (5 = muito alta)",
+    },
+    {
+        "Para simular": "Geada",
+        "Digite": "temperatura 0 °C (−2 = muito alta; neve 71–86 NÃO dispara)",
+    },
+    {
+        "Para simular": "Neblina",
+        "Digite": "umidade ≥ 95% + vento ≤ 15 km/h + chuva ≤ 10 mm/h",
+    },
+    {
+        "Para simular": "Tempo seco",
+        "Digite": "umidade < 30% (< 20% = moderada)",
+    },
+]
+
 DATA_DIR = Path("data")
+
+# Valores neutros para células limpas da bancada (célula vazia NUNCA
+# quebra a rodada — pedido do dono, 2026-09-13). Temperatura neutra
+# escolhida fora dos limiares: nem calor (>=35), nem frio (<=10), nem
+# geada (<=0) — 0 °C dispararia geada para todos.
+WEATHERCODE_VAZIO = 0.0  # céu limpo
+PRECIPITACAO_VAZIA = 0.0  # sem chuva
+VENTO_VAZIO = 0.0  # calmaria
+TEMPERATURA_VAZIA = 21.0  # neutra (nenhuma regra de temperatura dispara)
 
 
 def _fixture_key(latitude: float, longitude: float) -> str:
@@ -123,15 +221,13 @@ def _fixture_key(latitude: float, longitude: float) -> str:
 
 
 def _seguros_parse(valor: str) -> frozenset[InsuranceType]:
+    """Parse do campo "Seguros" da bancada: rótulos da UI (residencial/
+    auto) ou o valor canônico do domínio (residential/auto)."""
     tipos: set[InsuranceType] = set()
     for parte in str(valor).replace(";", ",").split(","):
-        texto = parte.strip().lower()
-        if not texto:
-            continue
-        try:
-            tipos.add(InsuranceType(texto))
-        except ValueError:
-            continue  # valor inválido digitado pela banca: ignora
+        tipo = SEGURO_ALIASES.get(parte.strip().lower())
+        if tipo is not None:
+            tipos.add(tipo)
     return frozenset(tipos)
 
 
@@ -144,7 +240,9 @@ def _holders_iniciais() -> pd.DataFrame:
                 "nome": h.name,
                 "telefone": h.phone,
                 "cep": h.cep,
-                "seguros": ", ".join(sorted(t.value for t in h.insurance_types)),
+                "seguros": ", ".join(
+                    sorted(SEGURO_LABELS[t] for t in h.insurance_types)
+                ),
                 "cidade": h.city,
             }
             for h in holders
@@ -169,16 +267,41 @@ def _tempo_inicial() -> pd.DataFrame:
                 "precipitacao": float(snap.get("precipitation_mm_h", 0.0)),
                 "vento": float(snap.get("wind_kmh", 0.0)),
                 "temperatura": float(snap.get("temperature_c", 0.0)),
+                "umidade": snap.get("humidity_pct"),
             }
         )
     return pd.DataFrame(rows)
 
 
-def _tempo_desc(weathercode: int, precip: float, vento: float, temp: float) -> str:
+def _num_or(valor, default: float) -> float:
+    """Número da bancada → float; NaN/vazio vira o default neutro do
+    campo (célula limpa nunca quebra a rodada nem o preview)."""
+    if valor is None or pd.isna(valor):
+        return default
+    return float(valor)
+
+
+def _umidade_or_none(valor) -> float | None:
+    """Umidade da bancada → float|None (NaN/vazio = desconhecida; as
+    regras que dependem dela pulam, mesma degradação do online)."""
+    if valor is None or pd.isna(valor):
+        return None
+    return float(valor)
+
+
+def _tempo_desc(
+    weathercode: int,
+    precip: float,
+    vento: float,
+    temp: float,
+    umidade: float | None,
+) -> str:
     cond = classify_weathercode(weathercode)
     label = CONDITION_LABELS.get(cond.value, cond.value)
+    umid = "umidade n/d" if umidade is None else f"umidade {umidade:.0f}%"
     return (
-        f"{label} · {precip:.1f} mm/h · {temp:.0f} °C · vento {vento:.0f} km/h"
+        f"{label} · {precip:.1f} mm/h · {temp:.0f} °C ·"
+        f" vento {vento:.0f} km/h · {umid}"
     )
 
 
@@ -237,6 +360,8 @@ st.session_state.setdefault("clima_preview", {})
 # Resultado do linking Telegram: ("erro", motivo, [], []) ou
 # ("ok", vinculados, pedidos_de_contato, erros).
 st.session_state.setdefault("telegram_linking", None)
+# Assinatura da última rodada disparada (guard de duplo disparo).
+st.session_state.setdefault("last_run_signature", None)
 
 with st.sidebar:
     st.header("Rodada")
@@ -263,8 +388,9 @@ with st.sidebar:
         "Token do bot (Telegram)",
         type="password",
         key="telegram_token",
-        help="Criado no @BotFather (/newbot). Não é persistido — vive"
-        " só nesta sessão. Alternativa: env TELEGRAM_BOT_TOKEN.",
+        help="Criado no @BotFather (/newbot); formato 123456789:ABC..."
+        " (sem espaços). Não é persistido — vive só nesta sessão."
+        " Alternativa: env TELEGRAM_BOT_TOKEN.",
     )
     st.caption(
         "O destino é resolvido por TELEFONE no banco de vínculos"
@@ -313,8 +439,9 @@ linking = st.session_state.get("telegram_linking")
 if linking:
     if linking[0] == "erro":
         st.warning(
-            f"Linking Telegram falhou (a bancada segue normalmente):"
-            f" {linking[1]}"
+            "Linking Telegram não executado (a bancada segue"
+            f" normalmente): {linking[1]} — verifique o token no campo"
+            " da sidebar (formato do BotFather: 123456789:ABC...)."
         )
     else:
         vinculados, pedidos, erros = linking[1], linking[2], linking[3]
@@ -342,9 +469,10 @@ st.caption(
     " automaticamente (BrasilAPI + Open-Meteo; requer internet; sem"
     " resolução, usa as coordenadas dos seeds). "
     + (
-        "No offline o TEMPO também é editável — o alerta é gerado"
-        " automaticamente pelas regras (ex.: weathercode 96 → granizo;"
-        " precipitação ≥ 10 mm/h → chuva; vento ≥ 60 km/h no litoral)."
+        "No offline o TEMPO também é editável — weathercode (dicionário"
+        " no expander abaixo), precipitação, vento, temperatura e umidade;"
+        " o alerta é gerado automaticamente pelas regras (ex.: weathercode"
+        " 96 → granizo; precipitação ≥ 10 mm/h → chuva; vento ≥ 60 km/h)."
         if fonte == FONTE_OFFLINE
         else "No online o tempo é REAL da Open-Meteo nas coordenadas"
         " resolvidas pelo CEP (sem alerta se o tempo estiver bom)."
@@ -360,7 +488,7 @@ bancada_holders = st.data_editor(
         "nome": st.column_config.TextColumn("Nome", required=True),
         "telefone": st.column_config.TextColumn("Telefone"),
         "cep": st.column_config.TextColumn("CEP (00000-000)"),
-        "seguros": st.column_config.TextColumn("Seguros (residential/auto)"),
+        "seguros": st.column_config.TextColumn("Seguros (residencial/auto)"),
         "cidade": st.column_config.TextColumn("Bairro/cidade"),
     },
     hide_index=True,
@@ -403,9 +531,14 @@ for row in rows:
 
 if mudou_cidade:
     # Recria o editor com o df atualizado (edições da banca preservadas).
+    # Se o usuário acabou de clicar em "Disparar Alertas", NÃO aborta com
+    # st.rerun(): o clique seria consumido e a rodada não executaria
+    # (bug do "clicou e nada aconteceu", 2026-09-13) — a rodada roda
+    # neste ciclo e o editor re-renderiza no próximo ciclo natural.
     st.session_state["bancada_holders_df"] = pd.DataFrame(rows)
     st.session_state["bancada_holders_version"] += 1
-    st.rerun()
+    if not rodar:
+        st.rerun()
 
 if avisos_geocode:
     st.warning(
@@ -424,21 +557,54 @@ if fonte == FONTE_OFFLINE:
         column_config={
             "id": st.column_config.TextColumn("Segurado", disabled=True),
             "weathercode": st.column_config.NumberColumn(
-                "Weathercode WMO", min_value=0, max_value=99, step=1
+                "Weathercode WMO",
+                min_value=0,
+                max_value=99,
+                step=1,
+                help="Código WMO da Open-Meteo. Veja o dicionário "
+                "(expander abaixo) — 96/99 = granizo; os demais eventos "
+                "usam as colunas ao lado.",
             ),
             "precipitacao": st.column_config.NumberColumn(
-                "Precipitação (mm/h)", min_value=0.0, format="%.1f"
+                "Precipitação (mm/h)",
+                min_value=0.0,
+                format="%.1f",
+                help="≥ 10 → chuva intensa; ≥ 30 com vento ≥ 60 → tempestade.",
             ),
             "vento": st.column_config.NumberColumn(
-                "Vento (km/h)", min_value=0.0, format="%.1f"
+                "Vento (km/h)",
+                min_value=0.0,
+                format="%.1f",
+                help="≥ 60 km/h → vento forte (≥ 80 → muito alta; "
+                "qualquer região). Ressaca segue só no litoral.",
             ),
             "temperatura": st.column_config.NumberColumn(
-                "Temperatura (°C)", format="%.1f"
+                "Temperatura (°C)",
+                format="%.1f",
+                help="≥ 35 → calor; ≤ 10 → frio; ≤ 0 → geada.",
+            ),
+            "umidade": st.column_config.NumberColumn(
+                "Umidade (%)",
+                min_value=0.0,
+                max_value=100.0,
+                format="%.0f",
+                help="Vazio = desconhecida (neblina e tempo seco pulam). "
+                "≥ 95% + vento ≤ 15 km/h → neblina; < 30% → tempo seco.",
             ),
         },
         hide_index=True,
     )
     st.session_state["bancada_tempo_df"] = bancada_tempo
+    with st.expander(
+        "Dicionário de weathercodes WMO (como digitar a simulação)"
+    ):
+        st.dataframe(WMO_DICT_ROWS, hide_index=True, width="stretch")
+        st.caption(
+            "Código fora da tabela é classificado como “parcialmente nublado”"
+            " (neutro — nenhum alerta). Os demais eventos usam as MÉTRICAS"
+            " ao lado do código, não o código em si:"
+        )
+        st.dataframe(RECEITA_ROWS, hide_index=True, width="stretch")
     tempo_por_id = {
         row["id"]: row for row in bancada_tempo.to_dict("records")
     }
@@ -446,10 +612,11 @@ if fonte == FONTE_OFFLINE:
         {
             "Segurado": row["id"],
             "Tempo da região (offline — editável acima)": _tempo_desc(
-                int(row["weathercode"]),
-                float(row["precipitacao"]),
-                float(row["vento"]),
-                float(row["temperatura"]),
+                int(_num_or(row["weathercode"], WEATHERCODE_VAZIO)),
+                _num_or(row["precipitacao"], PRECIPITACAO_VAZIA),
+                _num_or(row["vento"], VENTO_VAZIO),
+                _num_or(row["temperatura"], TEMPERATURA_VAZIA),
+                _umidade_or_none(row["umidade"]),
             ),
         }
         for row in bancada_tempo.to_dict("records")
@@ -477,6 +644,7 @@ else:
                     snap.precipitation_mm_h,
                     snap.wind_kmh,
                     snap.temperature_c,
+                    snap.humidity_pct,
                 )
             st.session_state["clima_preview"][row["id"]] = desc
         preview_rows.append(
@@ -490,14 +658,45 @@ if preview_rows:
     with st.expander("Clima da região do CEP (preview)", expanded=True):
         st.dataframe(preview_rows, hide_index=True)
 
+# Guard de duplo disparo (pedido do dono, 2026-09-13): 2 cliques com a
+# bancada idêntica NÃO reenviam — o 1º clique executa a rodada (Telegram
+# entregue) e o 2º apenas mantém o resultado (antes: 2 rodadas = 2
+# mensagens idênticas no Telegram).
+rodar_bloqueado = False
 if rodar:
+    assinatura = repr((
+        fonte,
+        modo,
+        modelo,
+        telegram_token or "",
+        bancada_holders.to_dict("records"),
+        bancada_tempo.to_dict("records") if fonte == FONTE_OFFLINE else None,
+    ))
+    if assinatura == st.session_state.get("last_run_signature"):
+        rodar_bloqueado = True
+        st.info(
+            "Rodada idêntica à última disparada — nada foi reenviado e o"
+            " resultado anterior é mantido abaixo. Edite a bancada (ou o"
+            " tempo simulado) para disparar uma nova rodada."
+        )
+    else:
+        st.session_state["last_run_signature"] = assinatura
+
+if rodar and not rodar_bloqueado:
     seeds = {h.id: h for h in load_policy_holders(DATA_DIR / "policy_holders.json")}
     holders_editados: list[PolicyHolder] = []
     for row in bancada_holders.to_dict("records"):
+        nome = row["nome"]
+        if nome is None or pd.isna(nome) or not str(nome).strip():
+            continue  # linha sem nome não é segurado (banca limpou a linha)
         seed = seeds.get(str(row["id"]))
         cep_digitos = "".join(ch for ch in str(row["cep"]) if ch.isdigit())
         location = seed.location if seed is not None else GeoLocation(0.0, 0.0)
-        if cep_digitos:
+        if fonte == FONTE_ONLINE and cep_digitos:
+            # No ONLINE a simulação usa as coordenadas do CEP geocodificado.
+            # No OFFLINE mantém as dos SEEDS (onde as fixtures existem): o
+            # CEP editado serve só ao rótulo do bairro/cidade — mudar o CEP
+            # não afeta nem quebra a simulação (pedido do dono, 2026-09-13).
             resolved = cache.get(cep_digitos)
             if resolved is not None and resolved.location is not None:
                 location = resolved.location
@@ -516,16 +715,28 @@ if rodar:
     if fonte == FONTE_OFFLINE:
         weather_snapshots = {
             _fixture_key(h.location.latitude, h.location.longitude): {
-                "weathercode": float(tempo_por_id[h.id]["weathercode"]),
-                "precipitation_mm_h": float(tempo_por_id[h.id]["precipitacao"]),
-                "wind_kmh": float(tempo_por_id[h.id]["vento"]),
-                "temperature_c": float(tempo_por_id[h.id]["temperatura"]),
+                "weathercode": int(
+                    _num_or(tempo_por_id[h.id]["weathercode"], WEATHERCODE_VAZIO)
+                ),
+                "precipitation_mm_h": _num_or(
+                    tempo_por_id[h.id]["precipitacao"], PRECIPITACAO_VAZIA
+                ),
+                "wind_kmh": _num_or(tempo_por_id[h.id]["vento"], VENTO_VAZIO),
+                "temperature_c": _num_or(
+                    tempo_por_id[h.id]["temperatura"], TEMPERATURA_VAZIA
+                ),
+                "humidity_pct":
+                    _umidade_or_none(tempo_por_id[h.id]["umidade"]),
             }
             for h in holders_editados
             if h.id in tempo_por_id
         }
 
-    with st.spinner("Disparando alertas..."):
+    with st.spinner(
+        "Disparando alertas... (modo LLM: cada mensagem depende do"
+        " provedor de IA — pode levar até ~90 s por mensagem quando o"
+        " provedor está lento)"
+    ):
         report, mode = run_proactive_round(
             offline=(fonte == FONTE_OFFLINE),
             llm_model=(modelo if modo == MODO_LLM else None),
@@ -580,10 +791,12 @@ else:
         name = holder.name if holder is not None else holder_id
         city = holder.city if holder is not None else ""
         phone = holder.phone if holder is not None else "—"
-        cond = CONDITION_LABELS.get(snapshot.condition.value, snapshot.condition.value)
-        tempo = (
-            f"{cond} · {snapshot.precipitation_mm_h:.1f} mm/h · "
-            f"{snapshot.temperature_c:.0f} °C · vento {snapshot.wind_kmh:.0f} km/h"
+        tempo = _tempo_desc(
+            snapshot.weathercode,
+            snapshot.precipitation_mm_h,
+            snapshot.wind_kmh,
+            snapshot.temperature_c,
+            snapshot.humidity_pct,
         )
         alerta = ", ".join(
             f"{EVENT_LABELS.get(a.kind.value, a.kind.value)} ({a.severity.value})"

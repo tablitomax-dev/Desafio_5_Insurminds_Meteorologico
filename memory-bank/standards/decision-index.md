@@ -1,6 +1,6 @@
 ---
-last_updated: 2026-09-06T00:00:00Z
-total_decisions: 9
+last_updated: 2026-09-07T00:00:00Z
+total_decisions: 10
 ---
 
 # Decision Index
@@ -128,3 +128,13 @@ This index tracks all Architecture Decision Records (ADRs) created during Constr
 - **Path**: `docs/decisions/010-telegram-links-sqlite.md` | `app/domain/ports.py` (`TelegramLinkRepository`) | `app/adapters/telegram_links_sqlite.py` | `app/adapters/telegram_api.py` (`send_contact_request`) | `app/composition.py`
 - **Summary**: O vínculo telefone → chat_id sai do campo `telegram_chat_id` do segurado (UI volátil) e passa a viver em **SQLite via stdlib `sqlite3`** (zero dependências): tabela `telegram_links(phone PK, chat_id, first_name, linked_at)` em `data/telegram_links.db`, FORA do Git (dados pessoais). Port `TelegramLinkRepository`; `TelegramSender` consulta o repo por telefone (só dígitos) no envio — sem vínculo → `skipped` (ADR-008). Chats com /start sem contato recebem teclado "Compartilhar meu contato" (`request_contact`). UI sem seletor de canal (Telegram único) e sem coluna chat_id; CLI preserva o SMS simulado da story 07; cadastro manual rejeitado pelo dono.
 - **Read when**: Ao implementar/alterar o linking Telegram, o repositório de vínculos, a resolução do destino de envio, ou ao avaliar mover os vínculos para outro banco.
+
+---
+
+### ADR-011: Bateria preventiva por ramo (Risco × Ramo × Fase) e escopo ampliado (intent 008)
+- **Status**: accepted
+- **Date**: 2026-09-07
+- **Supersedes**: ADR-009 (apenas o escopo por ramo e o material de mensagens; tiers, consolidação e demais decisões de 009 permanecem)
+- **Path**: `docs/decisions/011-risk-battery-matrix.md` | `app/domain/risk_battery.py` | `memory-bank/standards/tabela-alertas-preventiva.md` | `app/domain/messages.py` | `app/adapters/llm_messages.py`
+- **Summary**: A classificação de 005 era rígida (chuva só RESIDENTIAL, granizo só AUTO, ressaca só RESIDENTIAL); o dono verificou que "chuva intensa afeta um ou o outro ou ambos" e forneceu a bateria de negócio (Risco × Ramo, fases ANTES/DURANTE, severidade INMET amarelo/laranja/vermelho/preto, 6 regras transversais). `app.domain.risk_battery` passa a ser a fonte de verdade operacional do conteúdo: células por (risco, ramo) com impactos e recomendações por fase, INMET mapeado em nossa Severity, telefones de emergência em laranja+. Escopo ampliado: heavy_rain e hail → RESIDENTIAL ou AUTO; strong_wind e rough_sea nos 2 ramos (gatilho litoral mantido); fog permanece AUTO. Regras NOVAS: low_humidity (<30% LOW, <20% MEDIUM, pula sem umidade) e frost (≤0°C HIGH, ≤−2°C VERY_HIGH); fumaça/queimadas no backlog (Air Quality API). Template e prompt da LLM consomem as mesmas células (consistência story 06); regra 5 proíbe pós-sinistro no prompt; limite 480 mantido (cascata 3→2→1 recs por bloco).
+- **Read when**: Ao implementar/alterar escopo de regras, conteúdo das mensagens (bateria, fases, telefones, INMET), o prompt da LLM, ou ao avaliar novos riscos (fumaça).
