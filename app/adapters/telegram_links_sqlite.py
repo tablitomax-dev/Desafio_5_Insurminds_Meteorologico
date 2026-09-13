@@ -6,8 +6,8 @@ arquivo de banco (`data/telegram_links.db`) contém dados pessoais
 (telefone + chat_id) e NUNCA é versionado (`.gitignore`: `data/*.db`).
 
 Telefones são normalizados para SÓ DÍGITOS na gravação e na consulta —
-o Telegram envia E.164 (`+5511960628711`) e a bancada pode ter
-formatação livre (`(11) 96062-8711`): o match é pelos dígitos.
+o Telegram envia E.164 (`+5511900000000`) e a bancada pode ter
+formatação livre (`(11) 90000-0000`): o match é pelos dígitos.
 """
 
 from __future__ import annotations

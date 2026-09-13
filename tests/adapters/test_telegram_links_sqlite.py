@@ -30,10 +30,10 @@ def test_telefone_formatado_e_normalizado_para_digitos(tmp_path):
     """Given gravação com E.164 e consulta com formatação livre (ou
     vice-versa), when consulta, then o match é pelos dígitos."""
     repo = SqliteTelegramLinkRepository(tmp_path / "links.db")
-    repo.upsert_link("+5511960628711", "5704429924")
+    repo.upsert_link("+5511900000000", "XXXXXXXXXX")
 
     assert (
-        repo.get_chat_id_by_phone("+55 (11) 96062-8711") == "5704429924"
+        repo.get_chat_id_by_phone("+55 (11) 90000-0000") == "XXXXXXXXXX"
     )
 
 

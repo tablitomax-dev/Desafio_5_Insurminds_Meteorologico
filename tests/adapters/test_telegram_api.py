@@ -266,10 +266,10 @@ def test_send_contact_request_envia_teclado_request_contact():
         captured["payload"] = payload
         return _OK
 
-    send_contact_request("123456:T0K3N", "5704429924", post=post)
+    send_contact_request("123456:T0K3N", "1234567890", post=post)
 
     assert captured["url"].endswith("/sendMessage")
-    assert captured["payload"]["chat_id"] == 5704429924
+    assert captured["payload"]["chat_id"] == 1234567890
     keyboard = captured["payload"]["reply_markup"]["keyboard"]
     assert keyboard[0][0]["request_contact"] is True
     assert "contato" in captured["payload"]["text"]
