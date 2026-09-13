@@ -6,6 +6,7 @@ import pytest
 
 from app.domain.weather import (
     HAIL_WEATHERCODES,
+    WMO_SUPPORTED_CODES,
     GeoLocation,
     WeatherCondition,
     WeatherSnapshot,
@@ -109,3 +110,25 @@ class TestClassifyWeathercode:
     def test_hail_weathercodes_estao_em_hail(self):
         for code in HAIL_WEATHERCODES:
             assert classify_weathercode(code) is WeatherCondition.HAIL
+
+
+class TestWmoSupportedCodes:
+    def test_cobre_exatamente_os_28_codigos_da_tabela_open_meteo(self):
+        """Contrato do dicionário da bancada (UI): a lista exposta para
+        apresentação é exatamente a união dos códigos classificados."""
+        esperado = {
+            0, 1, 2, 3,
+            45, 48,
+            51, 53, 55, 56, 57,
+            61, 63, 65, 66, 67, 80, 81, 82,
+            71, 73, 75, 77, 85, 86,
+            95, 96, 99,
+        }
+        assert set(WMO_SUPPORTED_CODES) == esperado
+        assert WMO_SUPPORTED_CODES == tuple(sorted(esperado))
+
+    def test_todo_codigo_suportado_classifica_sem_fallback(self):
+        """Nenhum código do dicionário depende do fallback imediato:
+        cada código classifica dentro das condições da tabela."""
+        for code in WMO_SUPPORTED_CODES:
+            assert classify_weathercode(code) in WeatherCondition

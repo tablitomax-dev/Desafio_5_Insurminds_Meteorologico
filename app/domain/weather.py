@@ -57,6 +57,13 @@ def classify_weathercode(code: int) -> WeatherCondition:
     return WeatherCondition.CLOUDY
 
 
+# Códigos WMO classificados pela tabela (dicionário da bancada offline
+# da UI da banca — ui/demo_app.py; pedido do dono, 2026-09-13).
+WMO_SUPPORTED_CODES: tuple[int, ...] = tuple(
+    sorted({code for codes, _ in _WMO_MAP for code in codes})
+)
+
+
 @dataclass(frozen=True)
 class GeoLocation:
     """Coordenadas geográficas do segurado (decimal degrees)."""

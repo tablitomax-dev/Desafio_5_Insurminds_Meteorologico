@@ -72,11 +72,11 @@ def test_send_entrega_por_chat_id_do_repo_e_retorna_sent():
         return _OK
 
     repo = _RepoFake({"5511987650001": "123456789"})
-    record = TelegramSender("T0K3N", links=repo, post=post).send(
+    record = TelegramSender("123456:T0K3N", links=repo, post=post).send(
         _holder(), _message()
     )
 
-    assert captured["url"] == "https://api.telegram.org/botT0K3N/sendMessage"
+    assert captured["url"] == "https://api.telegram.org/bot123456:T0K3N/sendMessage"
     assert captured["payload"] == {
         "chat_id": 123456789,
         "text": "Olá, Maria! Granizo previsto.",
@@ -102,6 +102,26 @@ def test_send_sem_token_e_skipped_sem_rede():
     assert "token" in record.detail
 
 
+def test_send_token_invalido_e_skipped_sem_rede():
+    """Given token inválido (texto colado no campo da UI), when send,
+    then 'skipped' sem chamada de rede e SEM http.client.InvalidURL —
+    o token fora do formato <id>:<hash> é rejeitado antes da URL."""
+    texto_colado = (
+        "Pablo, alerta preto: aja imediatamente. Chuva intensa (12 mm/h)."
+    )
+
+    def post(url: str, payload: dict, timeout_s: float) -> bytes:
+        raise AssertionError("não deveria chamar a API com token inválido")
+
+    record = TelegramSender(texto_colado, links=_RepoFake(), post=post).send(
+        _holder(), _message()
+    )
+
+    assert record.status == "skipped"
+    assert "token" in record.detail
+    assert "inválido" in record.detail
+
+
 def test_send_sem_vinculo_no_repo_e_skipped_sem_rede():
     """Given telefone sem vínculo no repositório, when send, then
     'skipped' — o Telegram NÃO entrega por número de telefone."""
@@ -109,7 +129,7 @@ def test_send_sem_vinculo_no_repo_e_skipped_sem_rede():
     def post(url: str, payload: dict, timeout_s: float) -> bytes:
         raise AssertionError("não deveria chamar a API sem vínculo")
 
-    record = TelegramSender("T0K3N", links=_RepoFake(), post=post).send(
+    record = TelegramSender("123456:T0K3N", links=_RepoFake(), post=post).send(
         _holder(), _message()
     )
 
@@ -127,7 +147,7 @@ def test_chat_id_negativo_de_grupo_vira_int():
         return _OK
 
     repo = _RepoFake({"5511987650001": "-100123456"})
-    TelegramSender("T0K3N", links=repo, post=post).send(
+    TelegramSender("123456:T0K3N", links=repo, post=post).send(
         _holder(), _message()
     )
 
@@ -151,7 +171,7 @@ def test_telefone_formatado_casa_pelos_digitos():
         location=GeoLocation(latitude=-23.55, longitude=-46.63),
         insurance_types=frozenset({InsuranceType.RESIDENTIAL}),
     )
-    TelegramSender("T0K3N", links=repo, post=post).send(holder, _message())
+    TelegramSender("123456:T0K3N", links=repo, post=post).send(holder, _message())
 
     assert captured["payload"]["chat_id"] == 999
 
@@ -166,7 +186,7 @@ def test_erro_http_400_e_failed_sem_retry():
         raise HTTPError(url, 400, "Bad Request", None, None)  # type: ignore[arg-type]
 
     record = TelegramSender(
-        "T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
+        "123456:T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
     ).send(_holder(), _message())
 
     assert len(attempts) == 1
@@ -185,7 +205,7 @@ def test_ok_false_com_200_e_failed_sem_retry():
         return body
 
     record = TelegramSender(
-        "T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
+        "123456:T0K3N", links=_RepoFake({"5511987650001": "1"}), post=post
     ).send(_holder(), _message())
 
     assert len(attempts) == 1
@@ -203,7 +223,7 @@ def test_falha_de_rede_tem_retry_e_failed():
         raise URLError("connection refused")
 
     record = TelegramSender(
-        "T0K3N",
+        "123456:T0K3N",
         links=_RepoFake({"5511987650001": "1"}),
         post=post,
         retries=2,
@@ -226,7 +246,7 @@ def test_rede_instavel_recupera_e_envia():
         return _OK
 
     record = TelegramSender(
-        "T0K3N",
+        "123456:T0K3N",
         links=_RepoFake({"5511987650001": "1"}),
         post=post,
         retry_delay_s=0.0,
@@ -246,7 +266,7 @@ def test_send_contact_request_envia_teclado_request_contact():
         captured["payload"] = payload
         return _OK
 
-    send_contact_request("T0K3N", "5704429924", post=post)
+    send_contact_request("123456:T0K3N", "5704429924", post=post)
 
     assert captured["url"].endswith("/sendMessage")
     assert captured["payload"]["chat_id"] == 5704429924
@@ -305,7 +325,7 @@ def test_fetch_recent_contacts_parseia_e_deduplica():
         captured["payload"] = payload
         return _updates_fixture()
 
-    contatos = fetch_recent_contacts("T0K3N", post=post)
+    contatos = fetch_recent_contacts("123456:T0K3N", post=post)
 
     assert captured["url"].endswith("/getUpdates")
     assert captured["payload"] == {"allowed_updates": ["message"]}
@@ -328,3 +348,15 @@ def test_fetch_sem_token_levanta_erro_sem_rede():
 
     with pytest.raises(TelegramApiError, match="token"):
         fetch_recent_contacts("", post=post)
+
+
+def test_fetch_token_invalido_levanta_erro_sem_rede():
+    """Given token inválido (fora do formato <id>:<hash>), when
+    fetch_recent_contacts, then TelegramApiError SEM rede — nunca
+    http.client.InvalidURL (a UI mostra aviso amigável)."""
+
+    def post(url: str, payload: dict, timeout_s: float) -> bytes:
+        raise AssertionError("não deveria chamar a API com token inválido")
+
+    with pytest.raises(TelegramApiError, match="inválido"):
+        fetch_recent_contacts("abc123 sem dois pontos", post=post)

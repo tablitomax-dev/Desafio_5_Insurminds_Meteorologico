@@ -23,8 +23,9 @@ class InsuranceType(str, Enum):
 class PolicyHolder:
     """Segurado com localização e ramos contratados.
 
-    `is_coastal` marca região costeira — sinal usado pela StrongWindRule
-    (story 04). Seeds preenchem o mix residencial/auto/litoral/rural.
+    `is_coastal` marca região costeira — sinal usado pela RessacaRule
+    (o gate geográfico da StrongWindRule foi removido na emenda do dono
+    de 2026-09-13 — ADR-011). Seeds preenchem o mix residencial/auto/litoral/rural.
     `city` é rótulo de apresentação (UI da banca, intent 003). O destino
     Telegram NÃO vive aqui: o chat_id é resolvido por telefone no
     repositório de vínculos (SQLite — intent 006, ADR-010).

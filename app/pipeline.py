@@ -9,8 +9,10 @@ snapshot de clima de cada segurado consultado (UI da banca, intent 003).
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from app.domain.holders import PolicyHolder
 from app.domain.messages import GeneratedMessage, MessageGenerator
 from app.domain.notify import NotificationSender
 from app.domain.ports import (
@@ -44,6 +46,14 @@ class RoundReport:
     snapshots: tuple[tuple[str, WeatherSnapshot], ...] = ()
 
 
+# Revisão de desempenho (2026-09-08): a geração de mensagem (LLM) é I/O
+# de rede — em sequência, o tempo da rodada somava segundos × segurados.
+# O pool paraleliza as gerações (latência ≈ max(chamada) por vaga) e o
+# mapa preserva a ordem do relatório. Envios seguem sequenciais (rápidos).
+# 2026-09-13: 3 → 5 vagas (8 segurados → 2 ondas de chamada).
+GENERATION_WORKERS: int = 5
+
+
 def run_round(
     repository: PolicyHolderRepository,
     provider: WeatherProvider,
@@ -53,12 +63,12 @@ def run_round(
 ) -> RoundReport:
     """Executa uma rodada completa para todos os segurados do catálogo."""
     alerts: list[RiskAlert] = []
-    messages: list[GeneratedMessage] = []
-    sends: list = []
     failures: list[CollectionFailure] = []
     snapshots: list[tuple[str, WeatherSnapshot]] = []
+    consultas: list[tuple[PolicyHolder, list[RiskAlert]]] = []
     consulted = 0
 
+    # 1ª fase (sequencial): coleta + detecção de risco por segurado.
     for holder in repository.list_all():
         try:
             snapshot: WeatherSnapshot = provider.current(holder.location)
@@ -73,15 +83,32 @@ def run_round(
         if not holder_alerts:
             continue
         alerts.extend(holder_alerts)
-        # intent 007: UMA mensagem/envio por segurado — individual com 1
-        # risco; com ≥2, consolidada com todos os eventos e precauções
-        # (o relatório segue mostrando cada alerta individualmente).
+        consultas.append((holder, holder_alerts))
+
+    # 2ª fase (paralela): mensagem por segurado — individual com 1 risco;
+    # com ≥2, consolidada com todos os eventos e precauções (intent 007).
+    def _gerar(
+        consulta: tuple[PolicyHolder, list[RiskAlert]],
+    ) -> GeneratedMessage:
+        holder, holder_alerts = consulta
         if len(holder_alerts) == 1:
-            message = generator.generate(holder, holder_alerts[0])
-        else:
-            message = generator.generate_consolidated(holder, holder_alerts)
-        messages.append(message)
-        sends.append(sender.send(holder, message))
+            return generator.generate(holder, holder_alerts[0])
+        return generator.generate_consolidated(holder, holder_alerts)
+
+    workers = min(GENERATION_WORKERS, len(consultas))
+    if workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            messages = list(pool.map(_gerar, consultas))
+    else:
+        messages = [_gerar(consulta) for consulta in consultas]
+
+    # 3ª fase (sequencial): envio na mesma ordem do relatório.
+    sends = [
+        sender.send(holder, message)
+        for (holder, _holder_alerts), message in zip(
+            consultas, messages, strict=True
+        )
+    ]
 
     return RoundReport(
         holders_consulted=consulted,

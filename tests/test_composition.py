@@ -316,7 +316,7 @@ def test_rodada_delivery_telegram_envia_real(tmp_path, monkeypatch):
         data_dir=data,
         holders=[holder],
         delivery=DELIVERY_TELEGRAM,
-        telegram_token="T0K3N",
+        telegram_token="123456:T0K3N",
         link_repository=links,
     )
 
@@ -344,7 +344,7 @@ def test_rodada_telegram_sem_vinculo_e_skipped(tmp_path, monkeypatch):
         offline=True,
         data_dir=data,
         delivery=DELIVERY_TELEGRAM,
-        telegram_token="T0K3N",
+        telegram_token="123456:T0K3N",
         link_repository=_LinksFake(),
     )
 
