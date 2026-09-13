@@ -1,0 +1,41 @@
+sequenceDiagram
+    autonumber
+    participant U as Humano
+    participant O as Orquestrador (Master Agent)
+    participant R as Classificador
+    participant E as Executor (perfil fast/balanced/deep)
+    participant V as Verificador (pytest/ruff/mypy/build)
+    participant C as Crítico (perfil deep)
+    participant L as Log (maintenance-log)
+
+    U->>O: Tarefa + contexto (intent/story)
+    O->>R: classificar com sinais objetivos
+    R-->>O: nível 1/2/3 + perfil + max_iterations
+    O->>O: carregar contexto AI-DLC (OPT-13, caps)
+
+    loop até max_iterations OU parada
+        O->>E: objetivo local + pré-condições
+        E-->>O: diff mínimo (act_small)
+        O->>V: validar diff
+        V-->>O: tests/lint/typecheck/build
+        O->>O: self_assess → contrato de capacidade
+        O->>C: evidências (diff + validação + checklist)
+        C-->>O: accept | repair | blocked
+
+        alt repair
+            O->>L: registra iteração
+        else blocked (contrato de capacidade)
+            O->>L: registra bloqueio + evidência
+            O-->>U: blocker_type + required_human_input
+        else accept
+            alt nível 3 (dual_confirmation)
+                O-->>U: proposta p/ dupla confirmação
+                U-->>O: aprovar / rejeitar
+            end
+        end
+
+        O->>O: checar estagnação (métrica objetiva)
+    end
+
+    O-->>U: SUCESSO (tests_pass + acceptance_criteria_met)
+    O->>L: registra fechamento do loop

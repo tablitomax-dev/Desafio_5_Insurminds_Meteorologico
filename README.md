@@ -138,26 +138,27 @@ fixtures ────► adapters/fixtures ────┴─► pipeline.py ─
 - **Pipeline** recebe ports prontas; a **CLI** é o composition root
   (`LLM_MODEL`/`LLM_PROVIDER` selecionam a implementação da mensagem).
 
-Modelo binding default do LLM: `openrouter:z-ai/glm-5.3-flash` (troca
-livre via `LLM_MODEL`).
+Modelo binding default do LLM: `openrouter:z-ai/glm-5.3-flash` (mesmo
+executor usado pelas ferramentas AI-DLC deste repositório).
 
 ## Qualidade e governança
 
-- **TDD** vermelho→verde em todas as units; **213 testes** do produto
-  (`pytest`), **ruff** e **mypy** limpos.
+- **TDD** vermelho→verde em todas as units; **213 testes** do produto +
+  **122** da suíte AI-DLC (`pytest`), **ruff** e **mypy** limpos.
 - **CI obrigatório** em todo PR/push para `main` (`.github/workflows/ci.yml`):
   `ruff check .` + `mypy app` + `pytest`.
-- **Decisões arquiteturais** em ADRs imutáveis (`docs/decisions/`) e
-  especificação de negócio/arquitetura em `memory-bank/standards/`
-  (fonte da bateria preventiva).
+- **AI-DLC completo** (ver [AGENTS.md](AGENTS.md)): intents, stories, units,
+  bolts e ADRs em [memory-bank/](memory-bank/) — requisitos, decisões e
+  execução auditáveis (`docs/decisions/`, `memory-bank/bolts/`).
 
 ## Estrutura
 
 ```text
-app/                    produto (domain, adapters, composition, pipeline, cli)
-ui/                     demo visual (Streamlit, shell fino sobre app/composition)
-tests/                  testes do produto (pytest; pythonpath=. via pytest.ini)
-data/                   seeds de segurados + fixtures meteorológicas da demo offline
-docs/                   decisões (ADRs), arquitetura e material de entrega
-memory-bank/standards/  especificação de negócio e arquitetura do produto
+app/            produto (domain, adapters, composition, pipeline, cli)
+ui/             demo visual (Streamlit, shell fino sobre app/composition)
+tests/          testes do produto (pytest; pythonpath=. via pytest.ini)
+data/           seeds de segurados + fixtures meteorológicas da demo offline
+docs/           decisões (ADRs) e tasks da ferramenta AI-DLC
+memory-bank/    intents, stories, units, bolts, standards (AI-DLC Option A)
+tools/ai-dlc/   orquestrador + step pré-merge de qualidade (governança)
 ```

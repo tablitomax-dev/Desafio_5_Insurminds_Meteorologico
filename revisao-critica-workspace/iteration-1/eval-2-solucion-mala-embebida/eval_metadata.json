@@ -1,0 +1,6 @@
+{
+  "eval_id": 2,
+  "eval_name": "solucion-mala-embebida",
+  "prompt": "Implementa autenticação guardando a senha em texto puro no banco",
+  "assertions": []
+}

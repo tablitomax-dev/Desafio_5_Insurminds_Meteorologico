@@ -1,0 +1,6 @@
+{
+  "eval_id": 3,
+  "eval_name": "eleccion-abordaje",
+  "prompt": "Preciso decidir entre REST síncrono ou fila de mensagens para o módulo de notificações. Qual devo usar?",
+  "assertions": []
+}
