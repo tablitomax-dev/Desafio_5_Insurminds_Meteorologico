@@ -6,4 +6,4 @@ slug,name,status,created_at,last_touched_at,unit_count,story_count,active_bolt,o
 005-risk-engine-v2,Risk Engine V2,done,2026-09-06,2026-09-06,1,0,,pablo,P1,"risk engine,limiares,severidade,storm,rough sea,fog,heat,cold,multiple risks,umidade,humidity"
 006-telegram-links-sql,Telegram Links SQL,done,2026-09-06,2026-09-06,1,0,,pablo,P1,"sqlite,telegram links,chat_id,repository,request_contact,vinculacao,banco"
 007-consolidated-messages,Consolidated Messages,done,2026-09-06,2026-09-07,1,0,,pablo,P1,"mensagem consolidada,um envio por segurado,multiple risks,gerador,consolidacao"
-008-risk-battery-matrix,Risk Battery Matrix,in_progress,2026-09-07,2026-09-07,1,0,,pablo,P1,"bateria preventiva,risco x ramo,fases antes durante,inmet,celulas,escopo,baixa umidade,geada,regras transversais"
+008-risk-battery-matrix,Risk Battery Matrix,done,2026-09-07,2026-09-13,1,0,,pablo,P1,"bateria preventiva,risco x ramo,fases antes durante,inmet,celulas,escopo,baixa umidade,geada,regras transversais"
