@@ -1,1 +1,4 @@
 slug,name,status,type,created_at,last_touched_at,linked_bolt,environment,result_summary
+2026-09-08-telegram-double-send,Telegram Double Send,closed,production_failure,2026-09-08,2026-09-13,,telegram-real,"envio duplicado na rodada; guard de duplo disparo no PR #18 com regressao"
+2026-09-09-telegram-token-invalid-url,Telegram Token InvalidURL,closed,production_failure,2026-09-09,2026-09-13,,telegram-real,"token invalido estourava InvalidURL; validacao na borda + skipped com motivo no PR #18"
+2026-09-13-pii-secret-exposure,PII Secret Exposure,closed,secret_exposure,2026-09-13,2026-09-13,,github-public,"PII real em 3 arquivos desde intent 006; sanitizacao PR #19; historico nao reescrito; prevencao: secrets_scan no ai-dlc-kit"

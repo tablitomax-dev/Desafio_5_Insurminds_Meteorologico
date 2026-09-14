@@ -66,4 +66,4 @@ perfis vulneráveis no domínio.
 3. [x] Mensagem individual traz nível INMET, blocos Casa/Carro SOMENTE dos ramos contratados, fases pelas severidade e telefones em laranja+
 4. [x] Consolidado (007) preservado: eventos ordenados por severidade, dedup, ≤600, nível global
 5. [x] Prompt da LLM contém células (impactos, Antes/Durante), regras transversais 1–6 e proibição de pós-sinistro
-6. [x] `ruff check .`, `mypy app` e `pytest` verdes (209 passed)
+6. [x] `ruff check .`, `mypy app` e `pytest` verdes (213 passed — CI do PR #18)

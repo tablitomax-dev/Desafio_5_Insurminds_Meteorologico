@@ -44,6 +44,21 @@ Registro **determinístico** de todas operações de manutenção do memory-bank
 
 ---
 
+### [2026-09-13] Operação: integrity_sync (fechamento da memória + registro de operações)
+
+- **Trigger**: pedido humano ("feche essas duas") após auditoria crítica do método AI-DLC — dívida registrada no parecer
+- **Artefatos tocados (8)**: intents/_index.csv (008 `in_progress` → `done`), intents/008/intent.md (status done, PR #18, critério 6 corrigido 209 → 213 passed), bolts/_index.csv (001-bootstrap-ci-and-merge-governance e 001-pre-merge-quality-repair `active` → `done` com completed_at), operations/_index.csv (3 incidentes), operations/{2026-09-08-telegram-double-send, 2026-09-09-telegram-token-invalid-url, 2026-09-13-pii-secret-exposure}.md (novos), maintenance-log
+- **Economia de contexto estimada**: n/a
+- **Resultado**: ✅ sucesso
+- **Detalhes**:
+  - 1. Intent 008: entregue no PR #18 (merge `fe1a685`, CI verde com 213 passed); índice e intent.md dessincronizados desde 2026-09-07
+  - 2. Bolt 001-pre-merge-quality-repair: `runs.jsonl` registra 2 runs success em 2026-09-05 → `completed_at` 2026-09-05
+  - 3. Bolt 001-bootstrap-ci-and-merge-governance: concluído com a governança de CI/merge em produção desde o PR #8; `completed_at` = última data material registrada da intent 001 (2026-09-04, aproximação declarada)
+  - 4. Incidentes com datas aproximadas marcadas no texto (duplo disparo e InvalidURL ocorreram na semana da demo do intent 008)
+  - 5. Prevenção sistêmica dos 3 incidentes implementada no novo repo-template `ai-dlc-kit` (secrets_scan, gates de conteúdo, validação de borda)
+
+---
+
 ### [2026-09-04] Operação: artifact_registration (intent 002 — fechamento do desafio + README da banca)
 
 - **Trigger**: pedido humano ("falta algo ou terminamos todo o desafio?"); decisões aprovadas: README na raiz, sync+cleanup de branches, fechar intent 002
